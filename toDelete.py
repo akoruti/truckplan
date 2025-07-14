@@ -19,7 +19,20 @@ if uploaded_file:
         df = pd.read_excel(uploaded_file)
 else:
     # Esempio dati demo se non carichi file
-    df = pd.DataFrame([
+   # --- Dati Autista ---
+st.sidebar.header("Dati Autista")
+autista_nome = st.sidebar.text_input("Nome autista", "S.Pituscan")
+inizio_settimana = st.sidebar.date_input("Inizio settimana lavorativa", pd.to_datetime("2025-07-09"))
+ora_inizio = st.sidebar.time_input("Ora inizio giornata", pd.to_datetime("07:00").time())
+ore_guida_sett = st.sidebar.number_input("Ore guida residue settimana", 0.0, 56.0, 56.0, step=0.25)
+ore_guida_giorno = st.sidebar.number_input("Ore guida residue oggi", 0.0, 9.0, 9.0, step=0.25)
+tempo_guida_ininterrotta = st.sidebar.number_input("Tempo guida ininterrotta (min)", 0, 270, 270, step=5)
+pausa_necessaria = st.sidebar.number_input("Minuti pausa obbligatoria", 0, 45, 45, step=5)
+st.sidebar.write("---")
+st.sidebar.write(f"**Autista selezionato:** {autista_nome}")
+
+# Puoi salvare questi dati in session_state o usarli per filtri/calcoli sulle ore disponibili!
+ df = pd.DataFrame([
         {"Codice Viaggio":"115C6227S", "Partenza":"NUE9 Eggolsheim", "Data/Ora Partenza":"gio, 10 lug, 08:30 CEST", "Destinazione":"LIN8 Casirate D'Adda", "Data/Ora Arrivo":"ven, 11 lug, 14:15 CEST", "Distanza":728, "Durata stimata":"1g 7h", "Compenso (€)":1508.46, "€/km":2.07, "Rimorchio":"sganciato", "Modalità":"In tempo reale"},
         {"Codice Viaggio":"115K75KXK", "Partenza":"LIN8 Casirate D’Adda", "Data/Ora Partenza":"ven, 11 lug, 19:00", "Destinazione":"BLQ1 San Bellino, Rovigo", "Data/Ora Arrivo":"ven, 11 lug, 23:00", "Distanza":192.2, "Durata stimata":"5h 0m", "Compenso (€)":490.28, "€/km":2.55, "Rimorchio":"sganciato", "Modalità":"In tempo reale"},
         {"Codice Viaggio":"da inserire", "Partenza":"BLQ1 SAN BELLINO", "Data/Ora Partenza":"sab, 12 lug, 14:00", "Destinazione":"DMR1 CAMERANO", "Data/Ora Arrivo":"sab, 12 lug, 21:27", "Distanza":294.5, "Durata stimata":"7h 27m", "Compenso (€)":891.61, "€/km":3.03, "Rimorchio":"Semi-rimorchio", "Modalità":"In tempo reale"}
