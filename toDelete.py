@@ -51,7 +51,6 @@ st.metric("Viaggi Rejected", rejected_df.shape[0])
 
 # 8. Dettagli Viaggi Rejected
 st.subheader("Dettagli Viaggi Rejected")
-# Colonne chiave da mostrare: include anche 'Targa'
 cols = [
     'ID VR', 'Stato', 'Corriere', 'Conducente', 'Origine', 'Destinazione',
     'Sequenza delle strutture', 'Targa', 'È un camion CPT', 'Filtro furgone', 'CPT', 'Costo stimato'
@@ -91,7 +90,33 @@ bar = alt.Chart(status_counts).mark_bar().encode(
 )
 st.altair_chart(bar, use_container_width=True)
 
+# 12. Analisi Compenso per Conducente
+if 'Conducente' in rejected_df.columns and tot is not None:
+    st.subheader("Compenso Totale per Conducente")
+    # Raggruppa e calcola somma e media
+    driver_stats = (
+        rejected_df.groupby('Conducente')['Costo stimato']
+        .agg(Totale='sum', Media='mean', Conteggio='count')
+        .reset_index()
+        .sort_values('Totale', ascending=False)
+    )
+    # Selettore top N
+    top_n = st.sidebar.slider("Mostra top N conducenti", min_value=3, max_value=20, value=10)
+    top_stats = driver_stats.head(top_n)
+    st.dataframe(top_stats)
+    # Grafico a barre interattivo
+    st.subheader(f"Top {top_n} Conducenti per Compenso Totale")
+    bar_driver = (
+        alt.Chart(top_stats)
+        .mark_bar()
+        .encode(
+            x=alt.X('Conducente', sort='-y'),
+            y='Totale',
+            tooltip=['Conducente', 'Totale', 'Media', 'Conteggio']
+        )
+    )
+    st.altair_chart(bar_driver, use_container_width=True)
+
 # Note:
 # - Estratta la targa del camion dalla colonna 'ID Veicolo' (suffisso 'OTHR-').
-# - Aggiunta 'Targa' nei dettagli dei viaggi rejected insieme agli altri campi.
-# - Tutte le altre funzionalità rimangono invariate.
+# - Aggiunta analisi interattiva del compenso per conducente, con tabella e grafico Altair.
