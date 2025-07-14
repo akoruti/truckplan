@@ -1,11 +1,4 @@
-import sys
-try:
-    import streamlit as st
-except ModuleNotFoundError as e:
-    if 'micropip' in str(e):
-        sys.exit("Errore: modulo 'micropip' non trovato. Streamlit richiede micropip per funzionare in questo ambiente. Per favore esegui l'app in un'installazione Python standard o installa micropip.")
-    else:
-        raise
+import streamlit as st
 import pandas as pd
 import altair as alt
 import io
@@ -19,17 +12,14 @@ def load_data(raw_bytes, sep, enc, na_vals):
     Carica un CSV da raw bytes con opzioni di separatore, encoding e valori NA.
     Restituisce un DataFrame pandas.
     """
-    # Usa uno stream per inferire le colonne
     sample = io.BytesIO(raw_bytes)
     try:
         cols = pd.read_csv(sample, sep=sep, encoding=enc, nrows=0).columns.tolist()
     except Exception:
         cols = []
-    # Determina colonne data da parsare
     date_cols = [c for c in cols if c in [
         'CPT', 'Data/ora creazione VR (UTC)', 'Data/ora di annullamento VR (UTC)'
     ]]
-    # Rilegge i dati completi
     data_io = io.BytesIO(raw_bytes)
     df = pd.read_csv(
         data_io,
@@ -57,11 +47,10 @@ def main():
         st.info("Carica un file CSV per proseguire.")
         st.stop()
 
-    # Lettura dati
     raw_bytes = uploaded.read()
     df = load_data(raw_bytes, sep, enc, na_vals)
 
-    # Filtro dinamico: Stato
+    # Filtri dinamici
     df_filtered = df.copy()
     if 'Stato' in df.columns:
         state_opts = df['Stato'].dropna().unique().tolist()
@@ -70,7 +59,6 @@ def main():
     else:
         st.sidebar.warning("Colonna 'Stato' non trovata.")
 
-    # Filtro dinamico: Corriere
     if 'Corriere' in df.columns:
         carrier_opts = df['Corriere'].dropna().unique().tolist()
         selected_carriers = st.sidebar.multiselect("Corriere", carrier_opts, default=carrier_opts)
@@ -145,21 +133,16 @@ def main():
         st.header("Analisi Costi Stimati")
         cost_col = 'Costo stimato'
         if cost_col in df_filtered.columns:
-            # Funzione per pulire e convertire stringhe in formato euro
             def parse_euro(x):
                 try:
-                    s = str(x)
-                    # Rimuove simboli di valuta e spazi
-                    s = s.replace('€', '').replace(' ', '')
-                    # Gestisce separatori di migliaia e decimali
+                    s = str(x).replace('€','').replace(' ','')
                     if '.' in s and ',' in s:
-                        s = s.replace('.', '').replace(',', '.')
+                        s = s.replace('.','').replace(',','.')
                     else:
-                        s = s.replace(',', '.')
+                        s = s.replace(',','.')
                     return float(s)
                 except:
                     return None
-            # Conversione dei costi stimati in numerico
             df_filtered['Costo_Num'] = df_filtered[cost_col].apply(parse_euro)
             st.subheader("Istogramma Costo Stimato")
             hist = alt.Chart(df_filtered).mark_bar().encode(
@@ -169,7 +152,6 @@ def main():
             st.subheader("Boxplot Costo Stimato")
             box = alt.Chart(df_filtered).mark_boxplot().encode(y='Costo_Num:Q')
             st.altair_chart(box, use_container_width=True)
-            # Matrice di correlazione
             nums = df_filtered.select_dtypes(include=['number'])
             corr = nums.corr().stack().reset_index().rename(columns={'level_0':'x','level_1':'y',0:'corr'})
             heat = alt.Chart(corr).mark_rect().encode(
@@ -194,4 +176,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
