@@ -145,7 +145,22 @@ def main():
         st.header("Analisi Costi Stimati")
         cost_col = 'Costo stimato'
         if cost_col in df_filtered.columns:
-            df_filtered['Costo_Num'] = pd.to_numeric(df_filtered[cost_col], errors='coerce')
+            # Funzione per pulire e convertire stringhe in formato euro
+            def parse_euro(x):
+                try:
+                    s = str(x)
+                    # Rimuove simboli di valuta e spazi
+                    s = s.replace('€', '').replace(' ', '')
+                    # Gestisce separatori di migliaia e decimali
+                    if '.' in s and ',' in s:
+                        s = s.replace('.', '').replace(',', '.')
+                    else:
+                        s = s.replace(',', '.')
+                    return float(s)
+                except:
+                    return None
+            # Conversione dei costi stimati in numerico
+            df_filtered['Costo_Num'] = df_filtered[cost_col].apply(parse_euro)
             st.subheader("Istogramma Costo Stimato")
             hist = alt.Chart(df_filtered).mark_bar().encode(
                 alt.X('Costo_Num:Q', bin=alt.Bin(maxbins=50)), y='count()', tooltip=['count()']
@@ -154,6 +169,7 @@ def main():
             st.subheader("Boxplot Costo Stimato")
             box = alt.Chart(df_filtered).mark_boxplot().encode(y='Costo_Num:Q')
             st.altair_chart(box, use_container_width=True)
+            # Matrice di correlazione
             nums = df_filtered.select_dtypes(include=['number'])
             corr = nums.corr().stack().reset_index().rename(columns={'level_0':'x','level_1':'y',0:'corr'})
             heat = alt.Chart(corr).mark_rect().encode(
@@ -162,6 +178,7 @@ def main():
             st.subheader("Matrice di Correlazione")
             st.altair_chart(heat, use_container_width=True)
         else:
+            st.warning(f"Colonna '{cost_col}' non disponibile.")
             st.warning(f"Colonna '{cost_col}' non disponibile.")
 
     # 5. Flussi Origine → Destinazione
@@ -175,6 +192,9 @@ def main():
             st.dataframe(flow.sort_values('Count', ascending=False).head(50))
         else:
             st.warning("Colonne Origine/Destinazione non disponibili.")
+
+if __name__ == '__main__':
+    main()
 
 if __name__ == '__main__':
     main()
