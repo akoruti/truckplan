@@ -1,71 +1,103 @@
+# Streamlit Multi-AI Assistants
+
+Questa semplice applicazione Streamlit permette di chattare con differenti "assistenti" basati sui modelli OpenAI. Puoi scegliere tra un assistente generico, un esperto di Python o un assistente medico.
+
+## Preparazione
+1. Crea il file `.streamlit/secrets.toml` con la tua API key di OpenAI:
+   ```toml
+   [OPENAI]
+   api_key = "LA_TUA_CHIAVE"
+   ```
+
+2. Installa le dipendenze:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Avvia l'applicazione:
+   ```bash
+   streamlit run app.py
+   ```
+
+L'interfaccia web ti permetterà di scegliere l'assistente desiderato e di iniziare la conversazione.
+app.py
+Nuovo
++76
+-0
+
 import streamlit as st
-import yaml
-import os
+import openai
 
-# ——————————————————————————
-# Config
-# ——————————————————————————
-STORAGE_FILE = "regole.yaml"
+# Configura l'API Key di OpenAI nei secrets di Streamlit
+openai.api_key = st.secrets['OPENAI']['api_key']
 
-# ——————————————————————————
-# Funzioni di I/O
-# ——————————————————————————
-def carica_regole():
-    if not os.path.exists(STORAGE_FILE):
-        st.error(f"⚠️ File di regole non trovato: {STORAGE_FILE}")
-        return {}
-    with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+st.set_page_config(page_title="Multi-AI Assistants", layout="wide")
 
-def salva_regole(regole):
-    try:
-        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
-            # sort_keys=False per preservare l’ordine definito
-            yaml.dump(regole, f, allow_unicode=True, sort_keys=False)
-    except Exception as e:
-        st.error(f"❌ Errore salvataggio YAML: {e}")
+# Sidebar: scelta dell'assistente
+st.sidebar.title("Seleziona Assistente AI")
+assistant_options = {
+    "Assistente Generico": {"model": "gpt-4"},
+    "Assistente Esperto in Python": {"model": "gpt-3.5-turbo", "system": "You are a helpful Python coding expert."},
+    "Assistente Medico": {"model": "gpt-3.5-turbo", "system": "You are a professional medical assistant. Provide general advice, not diagnosis."}
+}
+assistant_name = st.sidebar.selectbox("Assistente", list(assistant_options.keys()))
+assistant_config = assistant_options[assistant_name]
 
-# ——————————————————————————
-# Configurazione pagina
-# ——————————————————————————
-st.set_page_config(
-    page_title="AI Viaggi Manager",
-    page_icon="🗺️",
-    layout="centered"
-)
+# Stato della conversazione
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
-st.title("🗺️ AI Viaggi Manager")
-st.markdown("Interfaccia Streamlit per gestire le regole AI di programmazione viaggi.")
+# Titolo
+st.title(f"Chat con {assistant_name}")
 
-# ——————————————————————————
-# Carica e mostra le regole
-# ——————————————————————————
-regole = carica_regole()
-if not regole:
-    st.stop()
+# Conversazione
+for msg in st.session_state.messages:
+    if msg['role'] == 'user':
+        st.markdown(f"**Tu:** {msg['content']}")
+    else:
+        st.markdown(f"**{assistant_name}:** {msg['content']}\n")
 
-sezione = st.selectbox("📂 Seleziona sezione", list(regole.keys()))
-st.subheader(f"📖 Dettagli: `{sezione}`")
-st.json(regole[sezione])
+# Input
+user_input = st.text_input("Scrivi qui il tuo messaggio...", key='input')
+send = st.button("Invia")
 
-# ——————————————————————————
-# Area di modifica (dev/demo)
-# ——————————————————————————
-st.markdown("---")
-st.markdown("### ✏️ Modifica YAML della sezione")
-yaml_input = st.text_area(
-    "Editor YAML",
-    value=yaml.dump(regole[sezione], allow_unicode=True, sort_keys=False),
-    height=300
-)
+if send and user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    messages = []
+    if 'system' in assistant_config:
+        messages.append({"role": "system", "content": assistant_config['system']})
+    messages.extend(st.session_state.messages)
+    with st.spinner("In corso..."):
+        response = openai.ChatCompletion.create(
+            model=assistant_config['model'],
+            messages=messages,
+            temperature=0.7
+        )
+    reply = response.choices[0].message.content
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+    st.session_state.input = ''
 
-if st.button("💾 Salva modifiche"):
-    try:
-        nuovi_dati = yaml.safe_load(yaml_input)
-        regole[sezione] = nuovi_dati
-        salva_regole(regole)
-        st.success("✅ Sezione aggiornata correttamente!")
-    except yaml.YAMLError as ye:
-        st.error(f"❌ Formato YAML non valido:\n{ye}")
-    except Exception as e:
-        st.error(f"❌ Errore inaspettato: {e}")
+# Istruzioni
+instructions = '''**Istruzioni:**
+
+1. Crea il file **.streamlit/secrets.toml** contenente:
+```
+[OPENAI]
+api_key = "LA_TUA_CHIAVE"
+```
+
+2. Crea **requirements.txt** con:
+```
+streamlit
+openai
+```
+
+3. Installa le dipendenze ed esegui l'app con:
+```
+pip install -r requirements.txt
+streamlit run app.py
+```
+'''
+
+st.sidebar.markdown(instructions)
+st.sidebar.markdown("Powered by OpenAI & Streamlit")
