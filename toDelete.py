@@ -25,20 +25,9 @@ def load_csv(data, sep, enc, na_values):
         return None, str(e)
 
 
-def trova_colonna_costo(df):
-    """
-    Trova la colonna contenente sia 'costo' che 'stimato' (case-insensitive).
-    """
-    for col in df.columns:
-        nome = col.lower().replace(" ", "")
-        if "costo" in nome and "stimato" in nome:
-            return col
-    return None
-
-
 def main():
-    st.set_page_config(page_title="Dashboard Viaggi e Compensi", layout="wide")
-    st.title("Dashboard Viaggi e Compensi per Autista")
+    st.set_page_config(page_title="Dashboard Viaggi e Costi Stimati", layout="wide")
+    st.title("Dashboard Viaggi e Costi Stimati per Autista")
 
     # Sidebar: caricamento file e opzioni
     st.sidebar.header("Caricamento e Filtri CSV")
@@ -66,13 +55,12 @@ def main():
     if 'ID Veicolo' in df.columns:
         df['Targa'] = df['ID Veicolo'].astype(str).str.extract(r'OTHR-(.*)')
 
-    # Colonna costo dinamica
-    col_costo = trova_colonna_costo(df)
-    if col_costo:
-        df['Costo_Num'] = pd.to_numeric(df[col_costo], errors='coerce')
+    # Estrazione e conversione esplicita di 'Costo stimato'
+    if 'Costo stimato' in df.columns:
+        df['Costo_Num'] = pd.to_numeric(df['Costo stimato'], errors='coerce')
     else:
         df['Costo_Num'] = pd.NA
-        st.warning("Colonna compenso non trovata, Costo_Num impostata a NaN.")
+        st.warning("Colonna 'Costo stimato' non trovata, 'Costo_Num' impostata a NA.")
 
     # Filtri dinamici
     st.sidebar.header("Filtri Viaggi")
@@ -88,12 +76,12 @@ def main():
     total_cost = filtered['Costo_Num'].sum(skipna=True)
     c1, c2, c3 = st.columns(3)
     c1.metric("Totale Viaggi", total_viaggi)
-    c2.metric("Compenso Medio (€)", f"{avg_cost:.2f}")
-    c3.metric("Compenso Totale (€)", f"{total_cost:.2f}")
+    c2.metric("Costo Stimato Medio (€)", f"{avg_cost:.2f}")
+    c3.metric("Costo Stimato Totale (€)", f"{total_cost:.2f}")
 
     # Tabella dettagliata
     st.subheader("Dettagli Viaggi")
-    cols = ['ID VR', 'Stato', 'Corriere', 'Conducente', 'Origine', 'Destinazione', 'Targa', 'Costo_Num']
+    cols = ['ID VR', 'Stato', 'Corriere', 'Conducente', 'Origine', 'Destinazione', 'Targa', 'Costo stimato', 'Costo_Num']
     display_cols = [c for c in cols if c in filtered.columns]
     st.dataframe(filtered[display_cols].reset_index(drop=True))
 
@@ -123,16 +111,13 @@ def main():
         pie_chart = alt.Chart(pie_data).mark_arc(innerRadius=50).encode(
             theta='Percentuale:Q',
             color='Categoria:N',
-            tooltip=[
-                alt.Tooltip('Categoria:N', title='Categoria'),
-                alt.Tooltip('Percentuale:Q', title='Percentuale', format='.2%')
-            ]
+            tooltip=[alt.Tooltip('Categoria:N', title='Categoria'), alt.Tooltip('Percentuale:Q', title='Percentuale', format='.2%')]
         )
         st.altair_chart(pie_chart, use_container_width=True)
 
-    # Analisi compenso per autista
+    # Analisi costo stimato per autista
     if 'Conducente' in filtered.columns:
-        st.subheader("Compenso per Autista")
+        st.subheader("Costo Stimato per Autista")
         driver_stats = (
             filtered.groupby('Conducente')['Costo_Num']
             .agg(Totale='sum', Media='mean', Viaggi='count')
@@ -155,5 +140,3 @@ def main():
         st.altair_chart(bar, use_container_width=True)
 
 if __name__ == '__main__':
-    main()
-
