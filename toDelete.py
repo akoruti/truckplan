@@ -1,86 +1,71 @@
 import streamlit as st
-import openai
+import yaml
+import os
 
-# Assicurati di avere i pacchetti necessari installati:
-# pip install streamlit openai
-
+# ——————————————————————————
 # Config
-openai.api_key = st.secrets['OPENAI']['api_key']
+# ——————————————————————————
+STORAGE_FILE = "regole.yaml"
 
-st.set_page_config(page_title="Multi-AI Assistants", layout="wide")
+# ——————————————————————————
+# Funzioni di I/O
+# ——————————————————————————
+def carica_regole():
+    if not os.path.exists(STORAGE_FILE):
+        st.error(f"⚠️ File di regole non trovato: {STORAGE_FILE}")
+        return {}
+    with open(STORAGE_FILE, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
-# Sidebar: scegli assistente
-st.sidebar.title("Seleziona Assistente AI")
-assistant_options = {
-    "Assistente Generico": {"model": "gpt-4"},
-    "Assistente Esperto in Python": {"model": "gpt-3.5-turbo", "system": "You are a helpful Python coding expert."},
-    "Assistente Medico": {"model": "gpt-3.5-turbo", "system": "You are a professional medical assistant. Provide general advice, not diagnosis."}
-}
-assistant_name = st.sidebar.selectbox("Assistente", list(assistant_options.keys()))
-assistant_config = assistant_options[assistant_name]
+def salva_regole(regole):
+    try:
+        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
+            # sort_keys=False per preservare l’ordine definito
+            yaml.dump(regole, f, allow_unicode=True, sort_keys=False)
+    except Exception as e:
+        st.error(f"❌ Errore salvataggio YAML: {e}")
 
-# State
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
+# ——————————————————————————
+# Configurazione pagina
+# ——————————————————————————
+st.set_page_config(
+    page_title="AI Viaggi Manager",
+    page_icon="🗺️",
+    layout="centered"
+)
 
-# Titolo pagina
-st.title(f"Chat con {assistant_name}")
+st.title("🗺️ AI Viaggi Manager")
+st.markdown("Interfaccia Streamlit per gestire le regole AI di programmazione viaggi.")
 
-# Mostra conversazione
-for msg in st.session_state.messages:
-    if msg['role'] == 'user':
-        st.markdown(f"**Tu:** {msg['content']}")
-    else:
-        st.markdown(f"**{assistant_name}:** {msg['content']}\n")
+# ——————————————————————————
+# Carica e mostra le regole
+# ——————————————————————————
+regole = carica_regole()
+if not regole:
+    st.stop()
 
-# Input utente
-user_input = st.text_input("Scrivi qui il tuo messaggio...", key='input')
-send = st.button("Invia")
+sezione = st.selectbox("📂 Seleziona sezione", list(regole.keys()))
+st.subheader(f"📖 Dettagli: `{sezione}`")
+st.json(regole[sezione])
 
-if send and user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    # Prepara messaggi
-    messages = []
-    if 'system' in assistant_config:
-        messages.append({"role": "system", "content": assistant_config['system']})
-    messages.extend(st.session_state.messages)
-    # Chiamata OpenAI
-    with st.spinner("In corso..."):
-        response = openai.ChatCompletion.create(
-            model=assistant_config['model'],
-            messages=messages,
-            temperature=0.7
-        )
-    reply = response.choices[0].message.content
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-    st.session_state.input = ''
+# ——————————————————————————
+# Area di modifica (dev/demo)
+# ——————————————————————————
+st.markdown("---")
+st.markdown("### ✏️ Modifica YAML della sezione")
+yaml_input = st.text_area(
+    "Editor YAML",
+    value=yaml.dump(regole[sezione], allow_unicode=True, sort_keys=False),
+    height=300
+)
 
-# Footer e istruzioni
-instructions = '''**Istruzioni:**
-
-1. Salva questo file come **app.py**
-
-2. Crea il file **.streamlit/secrets.toml** con dentro:
-```
-[OPENAI]
-api_key = "LA_TUA_CHIAVE"
-```
-
-3. Crea **requirements.txt** con:
-```
-streamlit
-openai
-```
-
-4. Installa dipendenze:
-```
-pip install -r requirements.txt
-```
-
-5. Esegui:
-```
-streamlit run app.py
-```'''
-st.sidebar.markdown(instructions)
-
-st.sidebar.markdown("Powered by OpenAI & Streamlit")
+if st.button("💾 Salva modifiche"):
+    try:
+        nuovi_dati = yaml.safe_load(yaml_input)
+        regole[sezione] = nuovi_dati
+        salva_regole(regole)
+        st.success("✅ Sezione aggiornata correttamente!")
+    except yaml.YAMLError as ye:
+        st.error(f"❌ Formato YAML non valido:\n{ye}")
+    except Exception as e:
+        st.error(f"❌ Errore inaspettato: {e}")
