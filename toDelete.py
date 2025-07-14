@@ -1,6 +1,9 @@
 import streamlit as st
 import openai
 
+# Assicurati di avere i pacchetti necessari installati:
+# pip install streamlit openai
+
 # Config
 openai.api_key = st.secrets['OPENAI']['api_key']
 
@@ -28,7 +31,7 @@ for msg in st.session_state.messages:
     if msg['role'] == 'user':
         st.markdown(f"**Tu:** {msg['content']}")
     else:
-        st.markdown(f"**{assistant_name}:** {msg['content']}")
+        st.markdown(f"**{assistant_name}:** {msg['content']}\n")
 
 # Input utente
 user_input = st.text_input("Scrivi qui il tuo messaggio...", key='input')
@@ -63,7 +66,18 @@ instructions = '''**Istruzioni:**
 api_key = "LA_TUA_CHIAVE"
 ```
 
-3. Esegui:
+3. Crea **requirements.txt** con:
+```
+streamlit
+openai
+```
+
+4. Installa dipendenze:
+```
+pip install -r requirements.txt
+```
+
+5. Esegui:
 ```
 streamlit run app.py
 ```'''
