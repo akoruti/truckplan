@@ -51,7 +51,7 @@ df_f = df[mask]
 # Tabs
 tabs = st.tabs(["Stato Viaggi", "Trend Tempo", "Autisti & Corrieri", "Costi", "Flussi Origine-Dest."])
 
-# 1. Stato Viaggi\ with tabs[0]
+# 1. Stato Viaggi
 with tabs[0]:
     st.header("Distribuzione Viaggi per Stato")
     cnt = df_f['Stato'].value_counts().reset_index()
@@ -63,7 +63,6 @@ with tabs[0]:
     st.dataframe(cnt)
 
 # 2. Trend Tempo
-t with tabs[1]
 with tabs[1]:
     st.header("Trend Settimanale/Mensile")
     if 'Data/ora creazione VR (UTC)' in df_f.columns:
@@ -80,17 +79,14 @@ with tabs[1]:
         st.warning("Colonna data creazione non disponibile.")
 
 # 3. Autisti & Corrieri
-tabs[2]
 with tabs[2]:
     st.header("Performance Corrieri e Autisti")
-    # Corrieri: completamenti vs cancellazioni
     metric = df_f.groupby(['Corriere','Stato'])['ID VR'].count().reset_index()
     chart = alt.Chart(metric).mark_bar().encode(
         x='Corriere:N', y='ID VR:Q', color='Stato:N', tooltip=['Corriere','Stato','ID VR']
     )
     st.subheader("Viaggi per Corriere e Stato")
     st.altair_chart(chart, use_container_width=True)
-    # Autisti: numero viaggi
     if 'Conducente' in df_f.columns:
         aut = df_f['Conducente'].value_counts().reset_index()
         aut.columns = ['Conducente','Count']
@@ -101,7 +97,6 @@ with tabs[2]:
         st.altair_chart(bar, use_container_width=True)
 
 # 4. Costi
-tabs[3]
 with tabs[3]:
     st.header("Analisi Costi Stimati")
     colc = 'Costo stimato'
@@ -115,7 +110,6 @@ with tabs[3]:
         st.subheader("Boxplot Costo Stimato")
         box = alt.Chart(df_f).mark_boxplot().encode(y='Costo_Num:Q')
         st.altair_chart(box, use_container_width=True)
-        # Correlazioni
         nums = df_f.select_dtypes(include=['number'])
         corr = nums.corr().stack().reset_index().rename(columns={'level_0':'x','level_1':'y',0:'corr'})
         heat = alt.Chart(corr).mark_rect().encode(
@@ -127,13 +121,11 @@ with tabs[3]:
         st.warning("Colonna Costo stimato non trovata.")
 
 # 5. Flussi Origine-Destinazione
-tabs[4]
 with tabs[4]:
     st.header("Frequenza Origine → Destinazione")
     if 'Origine' in df_f.columns and 'Destinazione' in df_f.columns:
         flow = df_f.groupby(['Origine','Destinazione']).size().reset_index(name='Count')
         st.dataframe(flow.sort_values('Count', ascending=False).head(50))
-        # Sankey placeholder
         st.info("Per flussi avanzati si può integrare plotly sankey o altair sankey plugin.")
     else:
         st.warning("Colonne Origine/Destinazione mancanti.")
