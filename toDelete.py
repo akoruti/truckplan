@@ -66,8 +66,7 @@ else:
     dati_autista = {}
 
 autista_nome = st.sidebar.text_input("Nome autista", dati_autista.get("Nome autista", "S.Pituscan"))
-in
-izione_settimana = st.sidebar.text_input("Inizio settimana lavorativa", dati_autista.get("Inizio settimana", "2025-07-09"))
+inizio_settimana = st.sidebar.text_input("Inizio settimana lavorativa", dati_autista.get("Inizio settimana", "2025-07-09"))
 ora_inizio_sett = st.sidebar.text_input("Ora inizio settimana", dati_autista.get("Ora inizio settimana","07:00"))
 ore_guida_sett = st.sidebar.text_input("Ore guida residue settimana", dati_autista.get("Ore guida residue settimana","56"))
 ore_guida_giorno = st.sidebar.text_input("Ore guida residue oggi", dati_autista.get("Ore guida residue oggi","9"))
@@ -127,7 +126,7 @@ if not edited_df.empty:
     if "Carburante (€)" in tot.columns:
         tot_row["Carburante (€)"] = tot["Carburante (€)"].sum()
     if "Pedaggi (€)" in tot.columns:
-        tot_row["Pedaggi (€)"].sum()
+        tot_row["Pedaggi (€)"] = tot["Pedaggi (€)"].sum()
     if "Totale costi (€)" in tot.columns:
         tot_row["Totale costi (€)" ] = tot["Totale costi (€)"].sum()
     full = pd.concat([tot, pd.DataFrame([tot_row])], ignore_index=True)
@@ -137,3 +136,4 @@ if not edited_df.empty:
 st.download_button("Scarica CSV", data=full.to_csv(index=False), file_name="programmazione_viaggi.csv")
 
 st.success("App pronta! Moduli OCR e regole applicate.")
+
