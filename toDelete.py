@@ -26,7 +26,7 @@ if 'Sequenza delle strutture' in df.columns:
 if 'ID Veicolo' in df.columns:
     df['Targa'] = df['ID Veicolo'].astype(str).str.extract(r'OTHR-(.*)')
 
-# 4. Filters: Stato
+# 4. Filtro per Stato
 st.sidebar.subheader("Filtra per Stato")
 stato_options = ['COMPLETED', 'CANCELLED', 'PLANNED']
 selected_states = st.sidebar.multiselect(
@@ -44,7 +44,7 @@ st.dataframe(status_counts)
 df['IsRejected'] = (df['Stato'] == 'PLANNED') & (df['Corriere'] == 'ADASR')
 rejected_df = df[df['IsRejected']]
 
-# 7. Metric: numero di Rejected
+# 7. Numero di Rejected
 st.subheader("Numero di Rejected (PLANNED+ADASR)")
 st.metric("Viaggi Rejected", rejected_df.shape[0])
 
@@ -60,7 +60,6 @@ st.dataframe(rejected_df[cols].reset_index(drop=True))
 # 9. Conversione compenso a numerico (gestione errori)
 if 'Costo stimato' in rejected_df.columns:
     rejected_df['Costo_Num'] = pd.to_numeric(rejected_df['Costo stimato'], errors='coerce')
-    # Compenso medio
     avg_cost = rejected_df['Costo_Num'].mean()
     st.subheader("Compenso Medio dei Rejected")
     st.metric("Valore Medio (€)", f"{avg_cost:.2f}")
@@ -90,7 +89,8 @@ bar_chart = alt.Chart(status_counts).mark_bar().encode(
 ).properties(width=600)
 st.altair_chart(bar_chart, use_container_width=True)
 
-# 12. Analisi Compenso per Autista\if 'Conducente' in rejected_df.columns and 'Costo_Num' in rejected_df.columns:
+# 12. Analisi Compenso per Autista
+if 'Conducente' in rejected_df.columns and 'Costo_Num' in rejected_df.columns:
     st.subheader("Compenso Totale per Autista")
     driver_stats = (
         rejected_df.groupby('Conducente')['Costo_Num']
@@ -102,19 +102,24 @@ st.altair_chart(bar_chart, use_container_width=True)
     top_stats = driver_stats.head(top_n)
     st.dataframe(top_stats)
     st.subheader(f"Top {top_n} Autisti per Compenso Totale")
-    bar_driver = alt.Chart(top_stats).mark_bar().encode(
-        x=alt.X('Conducente:N', sort='-y'),
-        y=alt.Y('Totale:Q'),
-        tooltip=[
-            alt.Tooltip('Conducente:N', title='Autista'),
-            alt.Tooltip('Totale:Q', title='Totale (€)'),
-            alt.Tooltip('Media:Q', title='Media (€)'),
-            alt.Tooltip('Conteggio:Q', title='Viaggi')
-        ]
-    ).properties(width=600)
+    bar_driver = (
+        alt.Chart(top_stats)
+        .mark_bar()
+        .encode(
+            x=alt.X('Conducente:N', sort='-y'),
+            y=alt.Y('Totale:Q'),
+            tooltip=[
+                alt.Tooltip('Conducente:N', title='Autista'),
+                alt.Tooltip('Totale:Q', title='Totale (€)'),
+                alt.Tooltip('Media:Q', title='Media (€)'),
+                alt.Tooltip('Conteggio:Q', title='Viaggi')
+            ]
+        )
+        .properties(width=600)
+    )
     st.altair_chart(bar_driver, use_container_width=True)
 
 # Note:
 # - Specificati tipi dei campi in Altair per evitare errori di schema.
 # - Gestita conversione di 'Costo stimato' a numerico.
-# - Aggiunto titolo e metriche formattate per chiarezza.
+# - Corretta indentazione e rimosso backslash accidentale.
