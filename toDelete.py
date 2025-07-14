@@ -7,17 +7,23 @@ import io
 st.set_page_config(page_title="Analytics Viaggi", layout="wide")
 
 @st.cache_data
-def load_data(uploaded, sep, enc, na_vals):
+def load_data(raw_bytes, sep, enc, na_vals):
+    """
+    Carica un CSV da raw bytes con opzioni di separatore, encoding e valori NA.
+    """
+    # Usa gli stessi bytes per inferenza e parsing
+    # Prima inferisce le date esistenti
+    sample = io.BytesIO(raw_bytes)
+    cols = pd.read_csv(sample, sep=sep, encoding=enc, nrows=0).columns.tolist()
+    date_cols = [c for c in ['CPT', 'Data/ora creazione VR (UTC)', 'Data/ora di annullamento VR (UTC)'] if c in cols]
+    # Parsing completo
+    data = io.BytesIO(raw_bytes)
     df = pd.read_csv(
-        io.BytesIO(uploaded.read()),
+        data,
         sep=sep,
         encoding=enc,
         na_values=na_vals,
-        parse_dates=[
-            col for col in [
-                'CPT', 'Data/ora creazione VR (UTC)', 'Data/ora di annullamento VR (UTC)'
-            ] if col in pd.read_csv(io.BytesIO(uploaded.read()), nrows=0).columns
-        ],
+        parse_dates=date_cols,
         dayfirst=True,
         infer_datetime_format=True,
         low_memory=False
@@ -36,7 +42,9 @@ if not uploaded:
     st.info("Carica un file per continuare")
     st.stop()
 
-df = load_data(uploaded, sep, enc, na_vals)
+# Leggi dati
+raw = uploaded.read()
+df = load_data(raw, sep, enc, na_vals)
 
 # Basic filters
 st.sidebar.subheader("Filtro Stato/Corriere")
@@ -65,9 +73,10 @@ with tabs[0]:
 # 2. Trend Tempo
 with tabs[1]:
     st.header("Trend Settimanale/Mensile")
-    if 'Data/ora creazione VR (UTC)' in df_f.columns:
-        df_f['Week'] = df_f['Data/ora creazione VR (UTC)'].dt.to_period('W').apply(lambda r: r.start_time)
-        df_f['Month'] = df_f['Data/ora creazione VR (UTC)'].dt.to_period('M').apply(lambda r: r.start_time)
+    date_col = 'Data/ora creazione VR (UTC)'
+    if date_col in df_f.columns:
+        df_f['Week'] = df_f[date_col].dt.to_period('W').apply(lambda r: r.start_time)
+        df_f['Month'] = df_f[date_col].dt.to_period('M').apply(lambda r: r.start_time)
         for freq, label in [('Week','Settimanale'), ('Month','Mensile')]:
             grp = df_f.groupby(freq)['ID VR'].count().reset_index().rename(columns={'ID VR':'Count'})
             st.subheader(f"Trend {label}")
