@@ -1,59 +1,73 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pytesseract
 from PIL import Image
+
+# Try to import pytesseract for OCR; if unavailable, disable OCR functionality
+try:
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
 
 # --- Config ---
 st.set_page_config(page_title="Programmazione Viaggi", layout="wide")
 
 st.title("Programmazione Viaggi Autista")
-st.markdown("Tutte le regole di layout, riga totale, costi, selezione e OCR sono applicate automaticamente.")
+st.markdown("Tutte le regole di layout, riga totale, costi, selezione e OCR (se disponibile) sono applicate automaticamente.")
 
 # --- Funzione OCR dati autista ---
-def estrai_dati_autista_da_immagine(image_file):
-    img = Image.open(image_file)
-    testo = pytesseract.image_to_string(img, lang='ita+eng')
-    estratti = {
-        "Nome autista": "",
-        "Inizio settimana": "",
-        "Ore guida residue settimana": "",
-        "Ore guida residue oggi": "",
-        "Guida ininterrotta residua": "",
-        "Pausa obbligatoria residua": "",
-        "Ultima posizione GPS": ""
-    }
-    for line in testo.splitlines():
-        l = line.lower()
-        if "nome" in l or "autista" in l:
-            estratti["Nome autista"] = line.split(":")[-1].strip()
-        elif "settimana" in l:
-            estratti["Inizio settimana"] = line.split(":")[-1].strip()
-        elif "guida residue settimana" in l or "residue settimana" in l:
-            estratti["Ore guida residue settimana"] = line.split(":")[-1].strip()
-        elif "oggi" in l and "guida" in l:
-            estratti["Ore guida residue oggi"] = line.split(":")[-1].strip()
-        elif "ininterrotta" in l:
-            estratti["Guida ininterrotta residua"] = line.split(":")[-1].strip()
-        elif "pausa" in l:
-            estratti["Pausa obbligatoria residua"] = line.split(":")[-1].strip()
-        elif "gps" in l or "posizione" in l:
-            estratti["Ultima posizione GPS"] = line.split(":")[-1].strip()
-    return estratti
+if OCR_AVAILABLE:
+    def estrai_dati_autista_da_immagine(image_file):
+        img = Image.open(image_file)
+        testo = pytesseract.image_to_string(img, lang='ita+eng')
+        estratti = {
+            "Nome autista": "",
+            "Inizio settimana": "",
+            "Ore guida residue settimana": "",
+            "Ore guida residue oggi": "",
+            "Guida ininterrotta residua": "",
+            "Pausa obbligatoria residua": "",
+            "Ultima posizione GPS": ""
+        }
+        for line in testo.splitlines():
+            l = line.lower()
+            if "nome" in l or "autista" in l:
+                estratti["Nome autista"] = line.split(":")[-1].strip()
+            elif "settimana" in l:
+                estratti["Inizio settimana"] = line.split(":")[-1].strip()
+            elif "residue settimana" in l:
+                estratti["Ore guida residue settimana"] = line.split(":")[-1].strip()
+            elif "oggi" in l and "guida" in l:
+                estratti["Ore guida residue oggi"] = line.split(":")[-1].strip()
+            elif "ininterrotta" in l:
+                estratti["Guida ininterrotta residua"] = line.split(":")[-1].strip()
+            elif "pausa" in l:
+                estratti["Pausa obbligatoria residua"] = line.split(":")[-1].strip()
+            elif "gps" in l or "posizione" in l:
+                estratti["Ultima posizione GPS"] = line.split(":")[-1].strip()
+        return estratti
+else:
+    def estrai_dati_autista_da_immagine(image_file):
+        st.warning("OCR non disponibile: installa pytesseract per abilitare l'estrazione.")
+        return {}
 
 # --- Dati Autista (Sidebar) ---
 st.sidebar.header("Dati Autista")
 
-uploaded_image = st.sidebar.file_uploader("Carica screenshot dati autista (jpg/png)", type=["jpg", "jpeg", "png"])
-dati_autista = {}
-if uploaded_image:
-    with st.spinner("Estrazione dati da immagine..."):
-        dati_autista = estrai_dati_autista_da_immagine(uploaded_image)
-    st.sidebar.success("Dati autista estratti dall'immagine!")
+if OCR_AVAILABLE:
+    uploaded_image = st.sidebar.file_uploader("Carica screenshot dati autista (jpg/png)", type=["jpg", "jpeg", "png"] )
+    dati_autista = {}
+    if uploaded_image:
+        with st.spinner("Estrazione dati da immagine..."):
+            dati_autista = estrai_dati_autista_da_immagine(uploaded_image)
+        st.sidebar.success("Dati autista estratti dall'immagine!")
+else:
+    dati_autista = {}
 
 autista_nome = st.sidebar.text_input("Nome autista", dati_autista.get("Nome autista", "S.Pituscan"))
-inizio_settimana = st.sidebar.text_input("Inizio settimana lavorativa", dati_autista.get("Inizio settimana", "2025-07-09"))
+in
+izione_settimana = st.sidebar.text_input("Inizio settimana lavorativa", dati_autista.get("Inizio settimana", "2025-07-09"))
 ora_inizio_sett = st.sidebar.text_input("Ora inizio settimana", dati_autista.get("Ora inizio settimana","07:00"))
 ore_guida_sett = st.sidebar.text_input("Ore guida residue settimana", dati_autista.get("Ore guida residue settimana","56"))
 ore_guida_giorno = st.sidebar.text_input("Ore guida residue oggi", dati_autista.get("Ore guida residue oggi","9"))
@@ -113,7 +127,7 @@ if not edited_df.empty:
     if "Carburante (€)" in tot.columns:
         tot_row["Carburante (€)"] = tot["Carburante (€)"].sum()
     if "Pedaggi (€)" in tot.columns:
-        tot_row["Pedaggi (€)"] = tot["Pedaggi (€)"].sum()
+        tot_row["Pedaggi (€)"].sum()
     if "Totale costi (€)" in tot.columns:
         tot_row["Totale costi (€)" ] = tot["Totale costi (€)"].sum()
     full = pd.concat([tot, pd.DataFrame([tot_row])], ignore_index=True)
