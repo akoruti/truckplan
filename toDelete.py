@@ -1,145 +1,139 @@
+# app_analytics.py
 import streamlit as st
 import pandas as pd
 import altair as alt
 import io
 
+st.set_page_config(page_title="Analytics Viaggi", layout="wide")
+
 @st.cache_data
-def load_csv(data, sep, enc, na_values):
-    """
-    Carica un CSV da bytes con opzioni di separatore, encoding e valori NA.
-    Restituisce DataFrame o errore.
-    """
-    try:
-        df = pd.read_csv(
-            io.BytesIO(data),
-            sep=sep,
-            encoding=enc,
-            na_values=na_values,
-            parse_dates=True,
-            dayfirst=True,
-            infer_datetime_format=True,
-            low_memory=False
-        )
-        return df, None
-    except Exception as e:
-        return None, str(e)
+def load_data(uploaded, sep, enc, na_vals):
+    df = pd.read_csv(
+        io.BytesIO(uploaded.read()),
+        sep=sep,
+        encoding=enc,
+        na_values=na_vals,
+        parse_dates=[
+            col for col in [
+                'CPT', 'Data/ora creazione VR (UTC)', 'Data/ora di annullamento VR (UTC)'
+            ] if col in pd.read_csv(io.BytesIO(uploaded.read()), nrows=0).columns
+        ],
+        dayfirst=True,
+        infer_datetime_format=True,
+        low_memory=False
+    )
+    return df
 
+# Sidebar: upload & options
+st.sidebar.header("Carica e Filtra")
+uploaded = st.sidebar.file_uploader("Seleziona CSV Viaggi", type="csv")
+sep = st.sidebar.selectbox("Delimitatore", [",", ";", "\t"], index=0)
+enc = st.sidebar.selectbox("Encoding", ["utf-8", "latin-1", "utf-16"], index=0)
+na_input = st.sidebar.text_input("Valori NA (sep. virgola)", "")
+na_vals = [v.strip() for v in na_input.split(',') if v.strip()]
 
-def main():
-    st.set_page_config(page_title="Dashboard Viaggi e Costi Stimati", layout="wide")
-    st.title("Dashboard Viaggi e Costi Stimati per Autista")
+if not uploaded:
+    st.info("Carica un file per continuare")
+    st.stop()
 
-    # Sidebar: caricamento file e opzioni
-    st.sidebar.header("Caricamento e Filtri CSV")
-    uploaded = st.sidebar.file_uploader("Seleziona file CSV", type="csv")
-    sep = st.sidebar.selectbox("Delimitatore", [",", ";", "\t"], index=0)
-    enc = st.sidebar.selectbox("Encoding", ["utf-8", "latin-1", "utf-16"], index=0)
-    na_input = st.sidebar.text_input("Valori NaN (separati da virgola)", "")
-    na_list = [v.strip() for v in na_input.split(",") if v.strip()]
+df = load_data(uploaded, sep, enc, na_vals)
 
-    if not uploaded:
-        st.info("Carica un file CSV per iniziare.")
-        return
+# Basic filters
+st.sidebar.subheader("Filtro Stato/Corriere")
+stati = df['Stato'].dropna().unique().tolist()
+corrieri = df['Corriere'].dropna().unique().tolist()
+sel_stati = st.sidebar.multiselect("Stato", stati, default=stati)
+sel_corrieri = st.sidebar.multiselect("Corriere", corrieri, default=corrieri)
 
-    # Caricamento con opzioni
-    data = uploaded.read()
-    df, error = load_csv(data, sep, enc, na_list)
-    if error:
-        st.error(f"Errore lettura CSV: {error}")
-        return
+mask = df['Stato'].isin(sel_stati) & df['Corriere'].isin(sel_corrieri)
+df_f = df[mask]
 
-    # Estrazioni: Origine/Destinazione e Targa
-    if 'Sequenza delle strutture' in df.columns:
-        seq = df['Sequenza delle strutture'].astype(str).str.split('->', expand=True)
-        df['Origine'] = seq[0]
-        df['Destinazione'] = seq[1]
-    if 'ID Veicolo' in df.columns:
-        df['Targa'] = df['ID Veicolo'].astype(str).str.extract(r'OTHR-(.*)')
+# Tabs
+tabs = st.tabs(["Stato Viaggi", "Trend Tempo", "Autisti & Corrieri", "Costi", "Flussi Origine-Dest."])
 
-    # Estrazione e conversione esplicita di 'Costo stimato'
-    if 'Costo stimato' in df.columns:
-        df['Costo_Num'] = pd.to_numeric(df['Costo stimato'], errors='coerce')
+# 1. Stato Viaggi\ with tabs[0]
+with tabs[0]:
+    st.header("Distribuzione Viaggi per Stato")
+    cnt = df_f['Stato'].value_counts().reset_index()
+    cnt.columns = ['Stato','Conteggio']
+    chart = alt.Chart(cnt).mark_bar().encode(
+        x=alt.X('Stato:N'), y='Conteggio:Q', color='Stato:N', tooltip=['Stato','Conteggio']
+    )
+    st.altair_chart(chart, use_container_width=True)
+    st.dataframe(cnt)
+
+# 2. Trend Tempo
+t with tabs[1]
+with tabs[1]:
+    st.header("Trend Settimanale/Mensile")
+    if 'Data/ora creazione VR (UTC)' in df_f.columns:
+        df_f['Week'] = df_f['Data/ora creazione VR (UTC)'].dt.to_period('W').apply(lambda r: r.start_time)
+        df_f['Month'] = df_f['Data/ora creazione VR (UTC)'].dt.to_period('M').apply(lambda r: r.start_time)
+        for freq, label in [('Week','Settimanale'), ('Month','Mensile')]:
+            grp = df_f.groupby(freq)['ID VR'].count().reset_index().rename(columns={'ID VR':'Count'})
+            st.subheader(f"Trend {label}")
+            line = alt.Chart(grp).mark_line(point=True).encode(
+                x=f'{freq}:T', y='Count:Q', tooltip=[freq,'Count']
+            )
+            st.altair_chart(line, use_container_width=True)
     else:
-        df['Costo_Num'] = pd.NA
-        st.warning("Colonna 'Costo stimato' non trovata, 'Costo_Num' impostata a NA.")
+        st.warning("Colonna data creazione non disponibile.")
 
-    # Filtri dinamici di Stato e Corriere
-    st.sidebar.header("Filtri Viaggi")
-    stati = df['Stato'].unique().tolist() if 'Stato' in df.columns else []
-    corrieri = df['Corriere'].unique().tolist() if 'Corriere' in df.columns else []
-    sel_stati = st.sidebar.multiselect("Stato", stati, default=stati)
-    sel_corrieri = st.sidebar.multiselect("Corriere", corrieri, default=corrieri)
-    filtered = df[df['Stato'].isin(sel_stati) & df['Corriere'].isin(sel_corrieri)]
-
-    # Metriche principali
-    total_viaggi = len(filtered)
-    avg_cost = filtered['Costo_Num'].mean(skipna=True)
-    total_cost = filtered['Costo_Num'].sum(skipna=True)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Totale Viaggi", total_viaggi)
-    c2.metric("Costo Stimato Medio (€)", f"{avg_cost:.2f}")
-    c3.metric("Costo Stimato Totale (€)", f"{total_cost:.2f}")
-
-    # Tabella dettagliata
-    st.subheader("Dettagli Viaggi")
-    cols = ['ID VR', 'Stato', 'Corriere', 'Conducente', 'Origine', 'Destinazione', 'Targa', 'Costo stimato', 'Costo_Num']
-    display_cols = [c for c in cols if c in filtered.columns]
-    st.dataframe(filtered[display_cols].reset_index(drop=True))
-
-    # Grafico distribuzione per stato
-    if 'Stato' in filtered.columns:
-        st.subheader("Distribuzione Viaggi per Stato")
-        counts = filtered['Stato'].value_counts().reset_index()
-        counts.columns = ['Stato', 'Conteggio']
-        chart = alt.Chart(counts).mark_bar().encode(
-            x=alt.X('Stato:N', sort='-y'),
-            y=alt.Y('Conteggio:Q'),
-            color='Stato:N',
-            tooltip=['Stato', 'Conteggio']
-        )
-        st.altair_chart(chart, use_container_width=True)
-
-    # Grafico percentuale camion CPT
-    if 'È un camion CPT' in filtered.columns:
-        st.subheader("Percentuale Camion CPT")
-        pie_data = (
-            filtered['È un camion CPT']
-            .value_counts(normalize=True)
-            .rename(index={True: 'Camion', False: 'Non Camion'})
-            .reset_index()
-        )
-        pie_data.columns = ['Categoria', 'Percentuale']
-        pie_chart = alt.Chart(pie_data).mark_arc(innerRadius=50).encode(
-            theta='Percentuale:Q',
-            color='Categoria:N',
-            tooltip=[alt.Tooltip('Categoria:N', title='Categoria'), alt.Tooltip('Percentuale:Q', title='Percentuale', format='.2%')]
-        )
-        st.altair_chart(pie_chart, use_container_width=True)
-
-    # Analisi costo stimato per autista
-    if 'Conducente' in filtered.columns:
-        st.subheader("Costo Stimato per Autista")
-        driver_stats = (
-            filtered.groupby('Conducente')['Costo_Num']
-            .agg(Totale='sum', Media='mean', Viaggi='count')
-            .reset_index()
-            .sort_values('Totale', ascending=False)
-        )
-        top_n = st.sidebar.slider("Top N Autisti", min_value=3, max_value=min(20, len(driver_stats)), value=10)
-        top = driver_stats.head(top_n)
-        st.dataframe(top)
-        bar = alt.Chart(top).mark_bar().encode(
-            x=alt.X('Conducente:N', sort='-y'),
-            y=alt.Y('Totale:Q'),
-            tooltip=[
-                alt.Tooltip('Conducente:N', title='Autista'),
-                alt.Tooltip('Totale:Q', title='Totale (€)'),
-                alt.Tooltip('Media:Q', title='Media (€)'),
-                alt.Tooltip('Viaggi:Q', title='Viaggi')
-            ]
+# 3. Autisti & Corrieri
+tabs[2]
+with tabs[2]:
+    st.header("Performance Corrieri e Autisti")
+    # Corrieri: completamenti vs cancellazioni
+    metric = df_f.groupby(['Corriere','Stato'])['ID VR'].count().reset_index()
+    chart = alt.Chart(metric).mark_bar().encode(
+        x='Corriere:N', y='ID VR:Q', color='Stato:N', tooltip=['Corriere','Stato','ID VR']
+    )
+    st.subheader("Viaggi per Corriere e Stato")
+    st.altair_chart(chart, use_container_width=True)
+    # Autisti: numero viaggi
+    if 'Conducente' in df_f.columns:
+        aut = df_f['Conducente'].value_counts().reset_index()
+        aut.columns = ['Conducente','Count']
+        st.subheader("Numero Viaggi per Autista")
+        bar = alt.Chart(aut.head(20)).mark_bar().encode(
+            x='Conducente:N', y='Count:Q', tooltip=['Conducente','Count']
         )
         st.altair_chart(bar, use_container_width=True)
 
-# Entry point
-if __name__ == "__main__":
-    main()
+# 4. Costi
+tabs[3]
+with tabs[3]:
+    st.header("Analisi Costi Stimati")
+    colc = 'Costo stimato'
+    if colc in df_f.columns:
+        df_f['Costo_Num'] = pd.to_numeric(df_f[colc], errors='coerce')
+        st.subheader("Distribuzione Costo Stimato")
+        hist = alt.Chart(df_f).mark_bar().encode(
+            alt.X('Costo_Num:Q', bin=alt.Bin(maxbins=50)), y='count()', tooltip=['count()']
+        )
+        st.altair_chart(hist, use_container_width=True)
+        st.subheader("Boxplot Costo Stimato")
+        box = alt.Chart(df_f).mark_boxplot().encode(y='Costo_Num:Q')
+        st.altair_chart(box, use_container_width=True)
+        # Correlazioni
+        nums = df_f.select_dtypes(include=['number'])
+        corr = nums.corr().stack().reset_index().rename(columns={'level_0':'x','level_1':'y',0:'corr'})
+        heat = alt.Chart(corr).mark_rect().encode(
+            x='x:N', y='y:N', color='corr:Q', tooltip=['x','y','corr']
+        )
+        st.subheader("Matrice di Correlazione")
+        st.altair_chart(heat, use_container_width=True)
+    else:
+        st.warning("Colonna Costo stimato non trovata.")
+
+# 5. Flussi Origine-Destinazione
+tabs[4]
+with tabs[4]:
+    st.header("Frequenza Origine → Destinazione")
+    if 'Origine' in df_f.columns and 'Destinazione' in df_f.columns:
+        flow = df_f.groupby(['Origine','Destinazione']).size().reset_index(name='Count')
+        st.dataframe(flow.sort_values('Count', ascending=False).head(50))
+        # Sankey placeholder
+        st.info("Per flussi avanzati si può integrare plotly sankey o altair sankey plugin.")
+    else:
+        st.warning("Colonne Origine/Destinazione mancanti.")
