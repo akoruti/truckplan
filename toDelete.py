@@ -179,7 +179,6 @@ def main():
             st.altair_chart(heat, use_container_width=True)
         else:
             st.warning(f"Colonna '{cost_col}' non disponibile.")
-            st.warning(f"Colonna '{cost_col}' non disponibile.")
 
     # 5. Flussi Origine → Destinazione
     with tabs[4]:
@@ -196,5 +195,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-if __name__ == '__main__':
-    main()
