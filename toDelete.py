@@ -21,7 +21,7 @@ def load_csv(data, sep, enc, na_values):
         return None, str(e)
 
 def trova_colonna_costo(df):
-    # Trova la colonna che contiene sia 'costo' che 'stimato'
+    # Cerca la colonna che contiene sia 'costo' che 'stimato'
     for col in df.columns:
         nome = col.lower().replace(" ", "")
         if "costo" in nome and "stimato" in nome:
@@ -36,18 +36,5 @@ def main():
     st.sidebar.header("Caricamento e Filtri")
     uploaded = st.sidebar.file_uploader("File CSV", type="csv")
     sep = st.sidebar.selectbox("Delimitatore", [",", ";", "\t"], index=0)
-    enc = st.sidebar.selectbox("Encoding", ["utf-8", "latin-1", "utf-16"], index=0)
-    na_list = [v.strip() for v in st.sidebar.text_input("Valori NaN (sep. virgola)", "").split(",") if v.strip()]
-
-    if not uploaded:
-        st.info("Carica un file CSV per iniziare")
-        return
-
-    df, error = load_csv(uploaded.read(), sep, enc, na_list)
-    if error:
-        st.error(f"Errore lettura CSV: {error}")
-        return
-
-    # Preprocessing
-    if 'Sequenza
+    enc = st.sidebar.selectbox("Encoding", ["utf-](#)
 
