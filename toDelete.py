@@ -59,9 +59,10 @@ cols = [c for c in cols if c in df.columns]
 st.dataframe(rejected_df[cols].reset_index(drop=True))
 
 # 9. Compenso medio dei Rejected
-tot = rejected_df['Costo stimato'] if 'Costo stimato' in rejected_df.columns else None
-if tot is not None:
-    avg_cost = tot.mean()
+if 'Costo stimato' in rejected_df.columns:
+    # Converti a numerico gestendo valori non numerici
+    costs = pd.to_numeric(rejected_df['Costo stimato'], errors='coerce')
+    avg_cost = costs.mean()
     st.subheader("Compenso Medio dei Rejected")
     st.metric("Valore Medio", f"{avg_cost:.2f}")
 
@@ -91,20 +92,19 @@ bar = alt.Chart(status_counts).mark_bar().encode(
 st.altair_chart(bar, use_container_width=True)
 
 # 12. Analisi Compenso per Conducente
-if 'Conducente' in rejected_df.columns and tot is not None:
-    st.subheader("Compenso Totale per Conducente")
-    # Raggruppa e calcola somma e media
+if 'Conducente' in rejected_df.columns and 'Costo stimato' in rejected_df.columns:
+    # Raggruppa e calcola totali convertendo a numerico
+    rejected_df['Costo_Num'] = pd.to_numeric(rejected_df['Costo stimato'], errors='coerce')
     driver_stats = (
-        rejected_df.groupby('Conducente')['Costo stimato']
+        rejected_df.groupby('Conducente')['Costo_Num']
         .agg(Totale='sum', Media='mean', Conteggio='count')
         .reset_index()
         .sort_values('Totale', ascending=False)
     )
-    # Selettore top N
+    st.subheader("Compenso Totale per Conducente")
     top_n = st.sidebar.slider("Mostra top N conducenti", min_value=3, max_value=20, value=10)
     top_stats = driver_stats.head(top_n)
     st.dataframe(top_stats)
-    # Grafico a barre interattivo
     st.subheader(f"Top {top_n} Conducenti per Compenso Totale")
     bar_driver = (
         alt.Chart(top_stats)
@@ -118,5 +118,6 @@ if 'Conducente' in rejected_df.columns and tot is not None:
     st.altair_chart(bar_driver, use_container_width=True)
 
 # Note:
-# - Estratta la targa del camion dalla colonna 'ID Veicolo' (suffisso 'OTHR-').
-# - Aggiunta analisi interattiva del compenso per conducente, con tabella e grafico Altair.
+# - Gestito conversione del 'Costo stimato' a numerico per evitare errori.
+# - Rimosso il vecchio calcolo diretto .mean() su stringhe.
+# - Aggiunta colonna temporanea 'Costo_Num' per l'analisi per conducente.
