@@ -7,37 +7,16 @@ import io
 st.markdown(
     """
     <style>
-    /* Page background */
-    .stApp {
-        background-color: #f7f9fc;
-    }
-    /* Header styling */
-    .streamlit-expanderHeader {
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: #1f77b4;
-    }
-    /* Card-like containers */
-    .stMetric {
-        background: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        padding: 1rem;
-        margin: 0.5rem;
-    }
-    /* Sidebar headers */
-    .css-1d391kg .css-1lcbmhc h2 {
-        color: #1f77b4;
-    }
+    .stApp { background-color: #f7f9fc; }
+    .streamlit-expanderHeader { font-size:1.2rem; font-weight:bold; color:#1f77b4; }
+    .stMetric { background:#fff; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); padding:1rem; margin:0.5rem; }
+    .css-1d391kg .css-1lcbmhc h2 { color:#1f77b4; }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Define a consistent color palette
 PALETTE = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
-
-# Configurazione pagina
 st.set_page_config(page_title="Analytics Viaggi", layout="wide")
 
 @st.cache_data
@@ -65,10 +44,10 @@ def load_data(raw_bytes, sep, enc, na_vals):
 
 
 def main():
-    # Sidebar: upload e opzioni di parsing
+    # Sidebar: upload and parsing options
     st.sidebar.header("Carica e Filtra CSV")
     uploaded = st.sidebar.file_uploader("Seleziona CSV Viaggi", type=["csv"])
-    sep = st.sidebar.selectbox("Delimitatore", [",", ";", "	"], index=0)
+    sep = st.sidebar.selectbox("Delimitatore", [",", ";", "\t"], index=0)
     enc = st.sidebar.selectbox("Encoding", ["utf-8", "latin-1", "utf-16"], index=0)
     na_input = st.sidebar.text_input("Valori NA (separati da virgola)", "")
     na_vals = [v.strip() for v in na_input.split(',') if v.strip()]
@@ -80,18 +59,18 @@ def main():
     raw_bytes = uploaded.read()
     df = load_data(raw_bytes, sep, enc, na_vals)
 
-    # Filtri dinamici
+    # Filters
     df_filtered = df.copy()
     if 'Stato' in df.columns:
-        state_opts = df['Stato'].dropna().unique().tolist()
-        selected_states = st.sidebar.multiselect("Stato", state_opts, default=state_opts)
-        df_filtered = df_filtered[df_filtered['Stato'].isin(selected_states)]
+        opts = df['Stato'].dropna().unique().tolist()
+        sel = st.sidebar.multiselect("Stato", opts, default=opts)
+        df_filtered = df_filtered[df_filtered['Stato'].isin(sel)]
     if 'Corriere' in df.columns:
-        carrier_opts = df['Corriere'].dropna().unique().tolist()
-        selected_carriers = st.sidebar.multiselect("Corriere", carrier_opts, default=carrier_opts)
-        df_filtered = df_filtered[df_filtered['Corriere'].isin(selected_carriers)]
+        opts = df['Corriere'].dropna().unique().tolist()
+        sel = st.sidebar.multiselect("Corriere", opts, default=opts)
+        df_filtered = df_filtered[df_filtered['Corriere'].isin(sel)]
 
-    # Parsing e conversione anticipata dei costi stimati
+    # Pre-parse costs
     cost_col = 'Costo stimato'
     def parse_euro(x):
         try:
@@ -105,143 +84,87 @@ def main():
             return None
     if cost_col in df_filtered.columns:
         df_filtered['Costo_Num'] = df_filtered[cost_col].apply(parse_euro)
-    
-    # Definizione tabs
-    if 'Stato' in df.columns:
-        state_opts = df['Stato'].dropna().unique().tolist()
-        selected_states = st.sidebar.multiselect("Stato", state_opts, default=state_opts)
-        df_filtered = df_filtered[df_filtered['Stato'].isin(selected_states)]
-    if 'Corriere' in df.columns:
-        carrier_opts = df['Corriere'].dropna().unique().tolist()
-        selected_carriers = st.sidebar.multiselect("Corriere", carrier_opts, default=carrier_opts)
-        df_filtered = df_filtered[df_filtered['Corriere'].isin(selected_carriers)]
 
-    # Definizione tabs
-    tabs = st.tabs([
-        "Stato Viaggi",
-        "Trend Tempo",
-        "Autisti & Corrieri",
-        "Costi Stimati",
-        "Flussi Orig-Dest"
-    ])
+    # Tabs setup
+    tabs = st.tabs(["Stato Viaggi", "Trend Tempo", "Autisti & Corrieri", "Costi Stimati", "Flussi Orig-Dest"])
 
-    # 1. Stato Viaggi
-    with tabs[0]:
+    with tabs[0]:  # Stato Viaggi
         st.header("🎯 Distribuzione Viaggi per Stato")
-        if 'Stato' in df_filtered.columns:
+        if 'Stato' in df_filtered:
             cnt = df_filtered['Stato'].value_counts().reset_index()
-            cnt.columns = ['Stato', 'Conteggio']
+            cnt.columns = ['Stato','Conteggio']
             chart = alt.Chart(cnt).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                x=alt.X('Stato:N', title=None),
-                y=alt.Y('Conteggio:Q', title='Numero di Viaggi'),
-                color=alt.Color('Stato:N', scale=alt.Scale(range=PALETTE)),
-                tooltip=['Stato','Conteggio']
-            ).properties(width='container', height=300)
+                x='Stato:N', y='Conteggio:Q', color=alt.Color('Stato:N', scale=alt.Scale(range=PALETTE)), tooltip=['Stato','Conteggio']
+            ).properties(height=300)
             st.altair_chart(chart)
             st.dataframe(cnt)
 
-    # 2. Trend Settimanale/Mensile
-    with tabs[1]:
+    with tabs[1]:  # Trend Tempo
         st.header("⏳ Trend Settimanale e Mensile")
-        date_col = 'Data/ora creazione VR (UTC)'
-        if date_col in df_filtered.columns:
-            df_filtered['Week'] = df_filtered[date_col].dt.to_period('W').apply(lambda r: r.start_time)
-            df_filtered['Month'] = df_filtered[date_col].dt.to_period('M').apply(lambda r: r.start_time)
-            for freq, label in [('Week','Settimanale'), ('Month','Mensile')]:
+        dc = 'Data/ora creazione VR (UTC)'
+        if dc in df_filtered:
+            df_filtered['Week'] = df_filtered[dc].dt.to_period('W').apply(lambda r: r.start_time)
+            df_filtered['Month'] = df_filtered[dc].dt.to_period('M').apply(lambda r: r.start_time)
+            for freq,label in [('Week','Settimanale'),('Month','Mensile')]:
                 grp = df_filtered.groupby(freq)['ID VR'].count().reset_index().rename(columns={'ID VR':'Count'})
                 st.subheader(f"Trend {label}")
                 line = alt.Chart(grp).mark_line(point=True).encode(
-                    x=alt.X(f'{freq}:T', title=label),
-                    y=alt.Y('Count:Q', title='Numero di Viaggi'),
-                    tooltip=[freq,'Count']
-                ).properties(width='container', height=250)
+                    x=f'{freq}:T', y='Count:Q', tooltip=[freq,'Count']
+                ).properties(height=250)
                 st.altair_chart(line)
 
-    # 3. Performance Corrieri e Autisti
-    with tabs[2]:
+    with tabs[2]:  # Autisti & Corrieri
         st.header("🚚 Performance Corrieri e Autisti")
         if {'Corriere','Stato','ID VR'}.issubset(df_filtered.columns):
             met = df_filtered.groupby(['Corriere','Stato'])['ID VR'].count().reset_index()
             chart = alt.Chart(met).mark_bar().encode(
-                x=alt.X('Corriere:N', title='Corriere'),
-                y=alt.Y('ID VR:Q', title='Numero di Viaggi'),
-                color=alt.Color('Stato:N', scale=alt.Scale(range=PALETTE)),
-                tooltip=['Corriere','Stato','ID VR']
-            ).properties(width='container', height=300)
+                x='Corriere:N', y='ID VR:Q', color=alt.Color('Stato:N', scale=alt.Scale(range=PALETTE)), tooltip=['Corriere','Stato','ID VR']
+            ).properties(height=300)
             st.altair_chart(chart)
-        if 'Conducente' in df_filtered.columns:
+        if 'Conducente' in df_filtered:
             drv = df_filtered['Conducente'].value_counts().reset_index()
-            drv.columns = ['Conducente','Count']
-            st.subheader("Top 20 Autisti per Numero di Viaggi")
-            bar2 = alt.Chart(drv.head(20)).mark_bar().encode(
-                x=alt.X('Conducente:N', title='Autista'),
-                y=alt.Y('Count:Q', title='Viaggi'),
-                color=alt.Color('Count:Q', scale=alt.Scale(scheme='blues'))
-            ).properties(width='container', height=300)
-            st.altair_chart(bar2)
+            drv.columns=['Conducente','Count']
+            st.subheader("Top 20 Autisti")
+            bar = alt.Chart(drv.head(20)).mark_bar().encode(
+                x='Conducente:N', y='Count:Q', tooltip=['Conducente','Count']
+            ).properties(height=300)
+            st.altair_chart(bar)
 
-    # 4. Analisi Costi Stimati
-    with tabs[3]:
+    with tabs[3]:  # Costi Stimati
         st.header("💰 Analisi Costi Stimati")
-        cost_col = 'Costo stimato'
-        if cost_col in df_filtered.columns:
-            def parse_euro(x):
-                try:
-                    s = str(x).replace('€','').replace(' ','').strip()
-                    if '.' in s and ',' in s:
-                        s = s.replace('.','').replace(',','.')
-                    else:
-                        s = s.replace(',','.')
-                    return float(s)
-                except:
-                    return None
-            df_filtered['Costo_Num'] = df_filtered[cost_col].apply(parse_euro)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Istogramma Costo Stimato")
+        if 'Costo_Num' in df_filtered:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Istogramma")
                 hist = alt.Chart(df_filtered).mark_bar(color='#2ca02c').encode(
-                    alt.X('Costo_Num:Q', bin=alt.Bin(maxbins=50), title='Costo (€)'),
-                    alt.Y('count():Q', title='Frequenza'),
-                    tooltip=['count():Q']
-                ).properties(width='container', height=250)
+                    alt.X('Costo_Num:Q', bin=alt.Bin(maxbins=50), title='Costo (€)'), y='count()', tooltip=['count()']
+                ).properties(height=250)
                 st.altair_chart(hist)
-            with col2:
-                st.subheader("Boxplot Costo Stimato")
+            with c2:
+                st.subheader("Boxplot")
                 box = alt.Chart(df_filtered).mark_boxplot(color='#d62728').encode(
-                    y=alt.Y('Costo_Num:Q', title='Costo (€)')
-                ).properties(width='container', height=250)
+                    y='Costo_Num:Q'
+                ).properties(height=250)
                 st.altair_chart(box)
-            st.subheader("Matrice di Correlazione")
-            nums = df_filtered.select_dtypes(include=['number'])
+            st.subheader("Correlazioni")
+            nums = df_filtered.select_dtypes(include='number')
             corr = nums.corr().stack().reset_index().rename(columns={'level_0':'x','level_1':'y',0:'corr'})
             heat = alt.Chart(corr).mark_rect().encode(
-                x=alt.X('x:N', title=None),
-                y=alt.Y('y:N', title=None),
-                color=alt.Color('corr:Q', scale=alt.Scale(scheme='viridis')), 
-                tooltip=['x','y','corr']
-            ).properties(width=600, height=400)
+                x='x:N', y='y:N', color=alt.Color('corr:Q', scale=alt.Scale(scheme='viridis')), tooltip=['x','y','corr']
+            ).properties(width=600,height=400)
             st.altair_chart(heat)
-            # Estrazione compenso per corsa e autista
-            st.subheader("📑 Compenso per Corsa e Autista")
-            if {'ID VR','Conducente'}.issubset(df_filtered.columns):
-                comp_df = df_filtered[['ID VR','Conducente', cost_col]].copy()
-                comp_df['Costo_Num'] = comp_df[cost_col].apply(parse_euro)
-                st.dataframe(comp_df.rename(columns={cost_col:'Costo Stimato'}).reset_index(drop=True))
-            else:
-                st.warning("Colonne 'ID VR' o 'Conducente' non disponibili per l'estrazione.")
+            st.subheader("Compenso per Corsa e Autista")
+            comp = df_filtered[['ID VR','Conducente','Costo_Num']].rename(columns={'Costo_Num':'Costo (€)'})
+            st.dataframe(comp)
 
-    # 5. Flussi Origine → Destinazione
-    with tabs[4]:
+    with tabs[4]:  # Flussi Orig-Dest
         st.header("🚛 Origine → Destinazione")
-        if 'Sequenza delle strutture' in df_filtered.columns:
-            seq = df_filtered['Sequenza delle strutture'].astype(str).str.split('->', expand=True)
+        if 'Sequenza delle strutture' in df_filtered:
+            seq = df_filtered['Sequenza delle strutture'].str.split('->', expand=True)
             df_filtered['Origine'], df_filtered['Destinazione'] = seq[0], seq[1]
         if {'Origine','Destinazione'}.issubset(df_filtered.columns):
             flow = df_filtered.groupby(['Origine','Destinazione']).size().reset_index(name='Count')
-            st.dataframe(flow.sort_values('Count', ascending=False).head(50))
-        else:
-            st.warning("Colonne Origine/Destinazione non disponibili.")
+            st.dataframe(flow.sort_values('Count',ascending=False).head(50))
 
 if __name__ == '__main__':
     main()
-
