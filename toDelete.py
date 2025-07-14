@@ -14,7 +14,7 @@ Questa semplice applicazione Streamlit permette di chattare con differenti "assi
    pip install -r requirements.txt
    ```
 
-3. Avvia l'applicazione:
+3. Avvia:
    ```bash
    streamlit run app.py
    ```
