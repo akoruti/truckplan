@@ -1,88 +1,54 @@
-# app.py
+# app_rejected.py
 
 import streamlit as st
 import pandas as pd
 import altair as alt
 
-# Configurazione pagina
-st.set_page_config(page_title="Dashboard Analisi Dati", layout="wide")
-st.title("Interfaccia Analisi Dati")
+st.set_page_config(page_title="Rilevazione Rejected Trips", layout="wide")
+st.title("Dashboard Rifiuti Viaggi")
 
-# Caricamento file CSV
-uploaded_file = st.file_uploader("Carica un file CSV", type=["csv"])
+# 1. Upload
+uploaded_file = st.file_uploader("Carica il file CSV dei viaggi", type="csv")
+if not uploaded_file:
+    st.info("Carica un CSV per analizzare i viaggi.")
+    st.stop()
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    
-    # --- Sezione Analisi Generali ---
-    st.subheader("🔎 Analisi Generali dei Dati")
-    with st.expander("Statistiche Descrittive"):  
-        st.write(df.describe(include='all').T)
-    with st.expander("Valori Mancanti"):  
-        missing = df.isnull().sum()
-        st.write(missing[missing > 0])
-    
-    # --- Sidebar: Scelta tipo di analisi ---
-    st.sidebar.header("Seleziona Analisi")
-    analysis = st.sidebar.selectbox("Tipo di Analisi", [
-        "Panoramica Colonne", "Istogramma", "Scatter Plot", "Correlazioni"
-    ])
-    
-    # Panoramica Colonne
-    if analysis == "Panoramica Colonne":
-        st.subheader("📋 Panoramica Colonne")
-        overview = pd.DataFrame({
-            'Tipo Dato': df.dtypes.astype(str),
-            'Unique': df.nunique(),
-            'Missing': df.isnull().sum(),
-            'Non Missing': df.notnull().sum()
-        })
-        st.dataframe(overview)
-        
-    # Istogramma
-    elif analysis == "Istogramma":
-        st.subheader("📊 Istogramma")
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        if not numeric_cols:
-            st.warning("Nessuna colonna numerica disponibile.")
-        else:
-            col = st.sidebar.selectbox("Colonna Numerica", numeric_cols)
-            bins = st.sidebar.slider("Numero di bin", 5, 100, 20)
-            chart = alt.Chart(df).mark_bar().encode(
-                alt.X(col, bin=alt.Bin(maxbins=bins)),
-                y='count()'
-            )
-            st.altair_chart(chart, use_container_width=True)
-    
-    # Scatter Plot
-    elif analysis == "Scatter Plot":
-        st.subheader("🔵 Scatter Plot")
-        numeric = df.select_dtypes(include=['number']).columns.tolist()
-        if len(numeric) < 2:
-            st.warning("Serve almeno 2 colonne numeriche.")
-        else:
-            x_axis = st.sidebar.selectbox("Asse X", numeric)
-            y_axis = st.sidebar.selectbox("Asse Y", numeric, index=1)
-            chart = alt.Chart(df).mark_circle(size=60).encode(
-                x=alt.X(x_axis, type='quantitative'),
-                y=alt.Y(y_axis, type='quantitative'),
-                tooltip=numeric
-            )
-            st.altair_chart(chart, use_container_width=True)
-    
-    # Correlazioni
-    else:
-        st.subheader("📈 Matrice di Correlazione")
-        corr = df.select_dtypes(include=['number']).corr()
-        st.write(corr)
+df = pd.read_csv(uploaded_file)
 
-else:
-    st.info("Attendi il caricamento di un file CSV per avviare l'analisi.")
+# 2. Riepilogo Stati
+st.subheader("Overview Stati Viaggi")
+status_counts = df['Stato'].value_counts().reset_index()
+status_counts.columns = ["Stato", "Conteggio"]
+st.dataframe(status_counts)
 
-# Esecuzione:
-# 1. pip install streamlit pandas altair
-# 2. streamlit run app.py
+# 3. Regola per “rejected”
+df['IsRejected'] = (df['Stato'] == 'PLANNED') & (df['Corriere'] == 'ADASR')
+rej_counts = df['IsRejected'].value_counts().rename({False:'Altro', True:'Rejected'})
+st.subheader("Conteggio Rejected (PLANNED+ADASR)")
+st.bar_chart(rej_counts)
 
+# 4. Dettagli dei Rejected
+st.subheader("Dettagli Viaggi Rejected")
+rejected_df = df[df['IsRejected']]
+# Seleziona le colonne chiave
+cols = ['Trip ID', 'Corriere', 'È un camion CPT', 'Filtro furgone', 'CPT']
+st.dataframe(rejected_df[cols].reset_index(drop=True))
+
+# 5. Grafico a torta % camion CPT nei rejected
+st.subheader("Percentuale Camion CPT fra i Rejected")
+pie = (
+    rejected_df['È un camion CPT']
+    .value_counts(normalize=True)
+    .rename(index={True:'Camion', False:'Non Camion'}) 
+    .reset_index()
+    .rename(columns={'index':'Categoria','È un camion CPT':'Percentuale'})
+)
+chart = alt.Chart(pie).mark_arc(innerRadius=50).encode(
+    theta=alt.Theta(field="Percentuale", type="quantitative"),
+    color=alt.Color(field="Categoria", type="nominal"),
+    tooltip=["Categoria", "Percentuale"]
+)
+st.altair_chart(chart, use_container_width=True)
 
 
 
