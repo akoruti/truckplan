@@ -2,107 +2,134 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 class TripScheduler:
-    def __init__(self, fuel_consumption=3.5, fuel_price=1.69, toll_rates=None):
+    """
+    A class to manage and schedule trips for drivers, calculate costs,
+    and select compatible routes based on availability.
+    """
+
+    def __init__(self, fuel_consumption_km_per_l=3.5, fuel_price_per_l=1.69, rest_unload_minutes=45, rest_hours=11, toll_rate_per_km=0.2):
+        # Initialize empty DataFrame for trips
+        self.trips = pd.DataFrame(columns=[
+            'Codice Viaggio', 'Partenza', 'DataPartenza', 'Destinazione', 'DataArrivo',
+            'Distanza_km', 'Durata_h', 'Compenso_eur', 'Eur_per_km', 'Rimorchio', 'Modalita'
+        ])
+        # Cost parameters
+        self.fuel_consumption = fuel_consumption_km_per_l    # km per liter
+        self.fuel_price = fuel_price_per_l                   # eur per liter
+        self.toll_rate = toll_rate_per_km                    # eur per km
+        # Rest parameters
+        self.unload_rest = timedelta(minutes=rest_unload_minutes)
+        self.daily_rest = timedelta(hours=rest_hours)
+
+    def add_trip(self, trip_info: dict):
         """
-        fuel_consumption: km per liter
-        fuel_price: euro per liter
-        toll_rates: dict with tuple (start, end) as key and toll cost as value
+        Add a trip to the schedule. trip_info keys:
+        'Codice Viaggio', 'Partenza', 'DataPartenza' (datetime), 'Destinazione', 'DataArrivo' (datetime),
+        'Distanza_km', 'Durata_h', 'Compenso_eur', 'Eur_per_km', 'Rimorchio', 'Modalita'
         """
-        self.trips = []
-        self.df = pd.DataFrame()
-        self.fuel_consumption = fuel_consumption
-        self.fuel_price = fuel_price
-        self.toll_rates = toll_rates or {}
+        self.trips = pd.concat([self.trips, pd.DataFrame([trip_info])], ignore_index=True)
 
-    def add_trip(self, codice, partenza, dt_p, destinazione, dt_a,
-                 distanza_km, durata_est, compenso_eur, eur_per_km,
-                 rimorchio, modalita):
-        trip = {
-            "Codice Viaggio": codice,
-            "Partenza": partenza,
-            "Data/Ora Partenza": dt_p,
-            "Destinazione": destinazione,
-            "Data/Ora Arrivo": dt_a,
-            "Distanza": distanza_km,
-            "Durata stimata": durata_est,
-            "Compenso (€)": compenso_eur,
-            "€/km": eur_per_km,
-            "Rimorchio": rimorchio,
-            "Modalità": modalita
-        }
-        self.trips.append(trip)
-        self._update_df()
-
-    def _update_df(self):
-        self.df = pd.DataFrame(self.trips)
-
-    def compute_costs(self):
-        def fuel_cost(km):
-            liters = km / self.fuel_consumption
-            return round(liters * self.fuel_price, 2)
-        def toll_cost(row):
-            key = (row['Partenza'], row['Destinazione'])
-            return self.toll_rates.get(key, 0.0)
-        self.df['Carburante (€)'] = self.df['Distanza'].apply(fuel_cost)
-        self.df['Pedaggi (€)'] = self.df.apply(toll_cost, axis=1)
-        self.df['Totale costi (€)'] = self.df['Carburante (€)'] + self.df['Pedaggi (€)']
-
-    def compute_totals(self):
-        total_km = self.df['Distanza'].sum()
-        total_comp = self.df['Compenso (€)'].sum()
-        avg_eur_km = round(total_comp / total_km, 2) if total_km else 0
-        total_fuel = self.df['Carburante (€)'].sum()
-        total_toll = self.df['Pedaggi (€)'].sum()
-        total_costs = total_fuel + total_toll
-        return {
-            "TOTALE": {
-                "Distanza": total_km,
-                "Compenso (€)": total_comp,
-                "€/km": avg_eur_km,
-                "Carburante (€)": total_fuel,
-                "Pedaggi (€)": total_toll,
-                "Totale costi (€)": total_costs
-            }
-        }
-
-    def append_totals_row(self):
-        totals = self.compute_totals()["TOTALE"]
-        totals_row = {"Codice Viaggio": "TOTALE"}
-        for k, v in totals.items():
-            totals_row[k] = v
-        for col in self.df.columns:
-            if col not in totals_row:
-                totals_row[col] = ""
-        self.df = pd.concat([self.df, pd.DataFrame([totals_row])], ignore_index=True)
-
-    def save_csv(self, path):
-        self.df.to_csv(path, index=False)
-
-    def next_available(self, last_arrival_str, unload_min=45, rest_h=11):
-        last_arrival = datetime.strptime(last_arrival_str, "%Y-%m-%d %H:%M")
-        end_unload = last_arrival + timedelta(minutes=unload_min)
-        available = end_unload + timedelta(hours=rest_h)
-        return available
-
-    def select_compatible_routes(self, routes_df, available_time, 
-                                 min_eur_km=None, min_comp=None, min_dist=None, top_n=5):
+    def calculate_fuel_cost(self, distance_km: float) -> float:
         """
-        routes_df: DataFrame with columns ['Partenza','Data/Ora Partenza','Destinazione',
-                  'Distanza','Compenso (€)','€/km',...]
-        available_time: datetime when driver is free
-        filters: min €/km, min compensation, min distance
-        returns: filtered and sorted DataFrame
+        Estimate fuel cost for given distance.
         """
+        liters = distance_km / self.fuel_consumption
+        return liters * self.fuel_price
+
+    def calculate_toll_cost(self, distance_km: float) -> float:
+        """
+        Estimate toll cost for given distance.
+        """
+        return distance_km * self.toll_rate
+
+    def calculate_trip_costs(self):
+        """
+        Add columns 'FuelCost_eur', 'TollCost_eur', 'TotalCost_eur' to trips DataFrame.
+        """
+        self.trips['FuelCost_eur'] = self.trips['Distanza_km'].apply(self.calculate_fuel_cost)
+        self.trips['TollCost_eur'] = self.trips['Distanza_km'].apply(self.calculate_toll_cost)
+        self.trips['TotalCost_eur'] = self.trips['FuelCost_eur'] + self.trips['TollCost_eur']
+
+    def next_available(self) -> datetime:
+        """
+        Calculate next availability time: last arrival + unload rest + daily rest.
+        """
+        if self.trips.empty:
+            return datetime.now()
+        last_arrival = self.trips['DataArrivo'].max()
+        return last_arrival + self.unload_rest + self.daily_rest
+
+    def select_compatible_routes(self, routes_df: pd.DataFrame, min_comp: float = None,
+                                 min_eur_per_km: float = None, min_km: float = None, top_n: int = 3) -> pd.DataFrame:
+        """
+        From a DataFrame of candidate routes, filter those starting after next_available,
+        apply optional filters (min compensation, min eur/km, min distance),
+        sort by compensation and eur/km descending, return top_n.
+        routes_df must have columns: 'DataPartenza' (datetime), 'Distanza_km', 'Compenso_eur', 'Eur_per_km'
+        """
+        avail = self.next_available()
         df = routes_df.copy()
-        df['Data/Ora Partenza'] = pd.to_datetime(df['Data/Ora Partenza'], format="%Y-%m-%d %H:%M")
-        df = df[df['Data/Ora Partenza'] >= available_time]
-        if min_eur_km is not None:
-            df = df[df['€/km'] >= min_eur_km]
+        df = df[df['DataPartenza'] >= avail]
         if min_comp is not None:
-            df = df[df['Compenso (€)'] >= min_comp]
-        if min_dist is not None:
-            df = df[df['Distanza'] >= min_dist]
-        df = df.sort_values(by=['Compenso (€)','€/km'], ascending=False)
+            df = df[df['Compenso_eur'] >= min_comp]
+        if min_eur_per_km is not None:
+            df = df[df['Eur_per_km'] >= min_eur_per_km]
+        if min_km is not None:
+            df = df[df['Distanza_km'] >= min_km]
+        df = df.sort_values(['Compenso_eur', 'Eur_per_km'], ascending=False)
         return df.head(top_n)
+
+    def totals(self) -> dict:
+        """
+        Return a summary of totals: km, compensation, fuel, tolls, drive hours.
+        """
+        self.calculate_trip_costs()
+        total_km = self.trips['Distanza_km'].sum()
+        total_comp = self.trips['Compenso_eur'].sum()
+        total_fuel = self.trips['FuelCost_eur'].sum()
+        total_toll = self.trips['TollCost_eur'].sum()
+        total_hours = self.trips['Durata_h'].sum()
+        avg_eur_per_km = total_comp / total_km if total_km else 0
+        return {
+            'total_km': total_km,
+            'total_comp_eur': total_comp,
+            'total_fuel_eur': total_fuel,
+            'total_toll_eur': total_toll,
+            'total_cost_eur': total_fuel + total_toll,
+            'total_drive_h': total_hours,
+            'avg_eur_per_km': avg_eur_per_km,
+            'num_trips': len(self.trips)
+        }
+
+    def save_csv(self, filename: str):
+        """
+        Save the trips DataFrame (including computed costs) to a CSV.
+        """
+        self.calculate_trip_costs()
+        self.trips.to_csv(filename, index=False)
+
+
+if __name__ == "__main__":
+    # Example usage
+    scheduler = TripScheduler()
+    # Add trips manually (example)
+    scheduler.add_trip({
+        'Codice Viaggio': '115C6227S',
+        'Partenza': 'NUE9 Eggolsheim',
+        'DataPartenza': datetime(2025, 7, 10, 8, 30),
+        'Destinazione': "LIN8 Casirate D'Adda",
+        'DataArrivo': datetime(2025, 7, 11, 14, 15),
+        'Distanza_km': 728.0,
+        'Durata_h': 9.5,
+        'Compenso_eur': 1508.46,
+        'Eur_per_km': 2.07,
+        'Rimorchio': 'Rimorchio sganciato',
+        'Modalita': 'In tempo reale'
+    })
+    # Display totals
+    print(scheduler.totals())
+    # Suppose you have a DataFrame of candidate routes
+    # routes_df = pd.DataFrame([...])
+    # print(scheduler.select_compatible_routes(routes_df))
 
 
