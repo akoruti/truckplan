@@ -2,11 +2,11 @@ import streamlit as st
 import openai
 
 # Config
-openai.api_key = st.secrets['OPENAI_API_KEY']
+openai.api_key = st.secrets['OPENAI']['api_key']
 
 st.set_page_config(page_title="Multi-AI Assistants", layout="wide")
 
-# Sidebar: choose assistant
+# Sidebar: scegli assistente
 st.sidebar.title("Seleziona Assistente AI")
 assistant_options = {
     "Assistente Generico": {"model": "gpt-4"},
@@ -16,56 +16,57 @@ assistant_options = {
 assistant_name = st.sidebar.selectbox("Assistente", list(assistant_options.keys()))
 assistant_config = assistant_options[assistant_name]
 
-# Initialize session state
+# State
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# Main UI
+# Titolo pagina
 st.title(f"Chat con {assistant_name}")
 
-# Display conversation
+# Mostra conversazione
 for msg in st.session_state.messages:
     if msg['role'] == 'user':
         st.markdown(f"**Tu:** {msg['content']}")
     else:
         st.markdown(f"**{assistant_name}:** {msg['content']}")
 
-# User input
+# Input utente
 user_input = st.text_input("Scrivi qui il tuo messaggio...", key='input')
 send = st.button("Invia")
 
 if send and user_input:
-    # Add user message
     st.session_state.messages.append({"role": "user", "content": user_input})
-
-    # Build messages for OpenAI
+    # Prepara messaggi
     messages = []
     if 'system' in assistant_config:
         messages.append({"role": "system", "content": assistant_config['system']})
     messages.extend(st.session_state.messages)
-
-    # Call OpenAI
+    # Chiamata OpenAI
     with st.spinner("In corso..."):
         response = openai.ChatCompletion.create(
             model=assistant_config['model'],
             messages=messages,
-            temperature=0.7,
+            temperature=0.7
         )
     reply = response.choices[0].message.content
     st.session_state.messages.append({"role": "assistant", "content": reply})
-
-    # Clear input
     st.session_state.input = ''
 
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("Powered by OpenAI & Streamlit")
+# Footer e istruzioni
+instructions = '''**Istruzioni:**
 
-# Instructions to run
-st.sidebar.markdown("**Istruzioni:**\n
-1. Salva questo file come app.py\n
-2. Imposta la tua chiave API in .streamlit/secrets.toml:\n````
+1. Salva questo file come **app.py**
+
+2. Crea il file **.streamlit/secrets.toml** con dentro:
+```
 [OPENAI]
-api_key = \"LA_TUA_CHIAVE\"
-````\n
-3. Esegui: `streamlit run app.py`")
+api_key = "LA_TUA_CHIAVE"
+```
+
+3. Esegui:
+```
+streamlit run app.py
+```'''
+st.sidebar.markdown(instructions)
+
+st.sidebar.markdown("Powered by OpenAI & Streamlit")
