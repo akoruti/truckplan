@@ -21,7 +21,6 @@ delimiter = st.sidebar.selectbox("Delimitatore", [",", ";", "\t"], index=0)
 encoding = st.sidebar.selectbox("Encoding", ["utf-8", "latin-1", "utf-16"], index=0)
 na_values = st.sidebar.text_input("Valori da trattare come NaN (separati da virgola)", value="")
 na_list = [v.strip() for v in na_values.split(",") if v.strip()]
-preview_lines = st.sidebar.number_input("Righe anteprima", min_value=5, max_value=100, value=5)
 
 # 3. Lettura CSV con caching e gestione errori
 @st.cache_data
@@ -47,25 +46,20 @@ if error:
     st.error(f"Errore lettura CSV: {error}")
     st.stop()
 
-# 4. Anteprima dati
-st.subheader("Anteprima Dati")
-st.write(df.head(preview_lines))
-
-# 5. Parsing colonne utili
+# 4. Parsing colonne utili
 if 'Sequenza delle strutture' in df.columns:
     seq = df['Sequenza delle strutture'].astype(str).str.split('->', expand=True)
     df['Origine'], df['Destinazione'] = seq[0], seq[1]
 if 'ID Veicolo' in df.columns:
     df['Targa'] = df['ID Veicolo'].astype(str).str.extract(r'OTHR-(.*)')
 
-# 6. Estrazione compensi e collegamento ad autisti
-# Assicuriamo che 'Conducente' e 'Costo stimato' esistano e siano convertiti
+# 5. Estrazione compensi e collegamento ad autisti
 if 'Costo stimato' in df.columns:
     df['Costo_Num'] = pd.to_numeric(df['Costo stimato'], errors='coerce')
 else:
     df['Costo_Num'] = pd.NA
 
-# 7. Filtri principali
+# 6. Filtri principali
 st.sidebar.subheader("Filtri")
 stato_options = df['Stato'].unique().tolist() if 'Stato' in df.columns else []
 selected_states = st.sidebar.multiselect("Stato viaggi", stato_options, default=stato_options)
@@ -73,14 +67,57 @@ carriers = df['Corriere'].unique().tolist() if 'Corriere' in df.columns else []
 selected_carriers = st.sidebar.multiselect("Corriere", carriers, default=carriers)
 filtered_df = df[df['Stato'].isin(selected_states) & df['Corriere'].isin(selected_carriers)]
 
-# 8. Overview viaggi
+# 7. Overview viaggi
 st.subheader("Overview Stati Viaggi")
 state_counts = filtered_df['Stato'].value_counts().reset_index()
 state_counts.columns = ['Stato', 'Conteggio']
 st.dataframe(state_counts)
 
-# 9. Analisi compensi per autista
-if 'Conducente' in df.columns:
+# 8. Dettagli di tutti i viaggi
+st.subheader("Dettagli di Tutti i Viaggi")
+cols = [
+    'ID VR', 'Stato', 'Corriere', 'Conducente', 'Origine', 'Destinazione',
+    'Sequenza delle strutture', 'Targa', 'È un camion CPT', 'Filtro furgone',
+    'CPT', 'Costo stimato'
+]
+cols = [c for c in cols if c in filtered_df.columns]
+st.dataframe(filtered_df[cols].reset_index(drop=True))
+
+# 9. Analisi compensi generali
+st.subheader("Compenso Medio e Totale di Tutti i Viaggi")
+avg_all = filtered_df['Costo_Num'].mean()
+tot_all = filtered_df['Costo_Num'].sum()
+st.metric("Compenso Medio (€)", f"{avg_all:.2f}")
+st.metric("Compenso Totale (€)", f"{tot_all:.2f}")
+
+# 10. Grafici interattivi
+# 10.1: Percentuale Camion CPT
+st.subheader("Percentuale Camion CPT tra i Viaggi")
+pie_data = (
+    filtered_df['È un camion CPT']
+    .value_counts(normalize=True)
+    .rename(index={True:'Camion', False:'Non Camion'})
+    .reset_index()
+    .rename(columns={'index':'Categoria', 'È un camion CPT':'Percentuale'})
+)
+pie_chart = alt.Chart(pie_data).mark_arc(innerRadius=50).encode(
+    theta=alt.Theta('Percentuale:Q'),
+    color=alt.Color('Categoria:N'),
+    tooltip=[alt.Tooltip('Categoria:N', title='Categoria'), alt.Tooltip('Percentuale:Q', title='Percentuale')]
+)
+st.altair_chart(pie_chart, use_container_width=True)
+
+# 10.2: Distribuzione Viaggi per Stato
+st.subheader("Distribuzione Viaggi per Stato")
+bar_chart = alt.Chart(state_counts).mark_bar().encode(
+    x=alt.X('Stato:N', sort=state_counts['Stato'].tolist()),
+    y=alt.Y('Conteggio:Q'),
+    color=alt.Color('Stato:N')
+).properties(width=600)
+st.altair_chart(bar_chart, use_container_width=True)
+
+# 11. Analisi compensi per autista
+if 'Conducente' in filtered_df.columns:
     st.subheader("Compenso Totale e Medio per Autista")
     stats = (
         filtered_df.groupby('Conducente')['Costo_Num']
@@ -88,46 +125,36 @@ if 'Conducente' in df.columns:
         .reset_index()
         .sort_values('Totale', ascending=False)
     )
-    # Selettore top N
     top_n = st.sidebar.slider("Top N autisti", min_value=3, max_value=20, value=10)
     top_stats = stats.head(top_n)
     st.dataframe(top_stats)
-    # Grafico a barre interattivo Totale
+    # Grafico Totale
+    bar_tot = alt.Chart(top_stats).mark_bar().encode(
+        x=alt.X('Conducente:N', sort='-y'),
+        y=alt.Y('Totale:Q'),
+        tooltip=[
+            alt.Tooltip('Conducente:N', title='Autista'),
+            alt.Tooltip('Totale:Q', title='Totale (€)'),
+            alt.Tooltip('Media:Q', title='Media (€)'),
+            alt.Tooltip('Viaggi:Q', title='N. Viaggi')
+        ]
+    )
     st.subheader(f"Top {top_n} Autisti per Totale Compenso")
-    bar_tot = (
-        alt.Chart(top_stats)
-        .mark_bar()
-        .encode(
-            x=alt.X('Conducente:N', sort='-y'),
-            y=alt.Y('Totale:Q'),
-            tooltip=[
-                alt.Tooltip('Conducente:N', title='Autista'),
-                alt.Tooltip('Totale:Q', title='Totale (€)'),
-                alt.Tooltip('Media:Q', title='Media (€)'),
-                alt.Tooltip('Viaggi:Q', title='N. Viaggi')
-            ]
-        )
-    )
     st.altair_chart(bar_tot, use_container_width=True)
-    # Grafico a barre interattivo Media
-    st.subheader(f"Top {top_n} Autisti per Media Compenso")
-    bar_mean = (
-        alt.Chart(top_stats)
-        .mark_bar()
-        .encode(
-            x=alt.X('Conducente:N', sort='-y'),
-            y=alt.Y('Media:Q'),
-            tooltip=[
-                alt.Tooltip('Conducente:N', title='Autista'),
-                alt.Tooltip('Totale:Q', title='Totale (€)'),
-                alt.Tooltip('Media:Q', title='Media (€)'),
-                alt.Tooltip('Viaggi:Q', title='N. Viaggi')
-            ]
-        )
+    # Grafico Media
+    bar_mean = alt.Chart(top_stats).mark_bar().encode(
+        x=alt.X('Conducente:N', sort='-y'),
+        y=alt.Y('Media:Q'),
+        tooltip=[
+            alt.Tooltip('Conducente:N', title='Autista'),
+            alt.Tooltip('Totale:Q', title='Totale (€)'),
+            alt.Tooltip('Media:Q', title='Media (€)'),
+            alt.Tooltip('Viaggi:Q', title='N. Viaggi')
+        ]
     )
+    st.subheader(f"Top {top_n} Autisti per Media Compenso")
     st.altair_chart(bar_mean, use_container_width=True)
 
 # Note:
-# - Gestione completa dei compensi: conversione e NaN.
-# - Collegamento diretto di Costo_Num a Conducente.
-# - Grafici interattivi per Totale e Media compenso.
+# - Rimosse le anteprime dati su richiesta.
+# - Tutte le altre funzionalità rimangono invariate.
