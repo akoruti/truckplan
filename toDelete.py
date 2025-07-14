@@ -196,6 +196,14 @@ def main():
                 tooltip=['x','y','corr']
             ).properties(width=600, height=400)
             st.altair_chart(heat)
+            # Estrazione compenso per corsa e autista
+            st.subheader("📑 Compenso per Corsa e Autista")
+            if {'ID VR','Conducente'}.issubset(df_filtered.columns):
+                comp_df = df_filtered[['ID VR','Conducente', cost_col]].copy()
+                comp_df['Costo_Num'] = comp_df[cost_col].apply(parse_euro)
+                st.dataframe(comp_df.rename(columns={cost_col:'Costo Stimato'}).reset_index(drop=True))
+            else:
+                st.warning("Colonne 'ID VR' o 'Conducente' non disponibili per l'estrazione.")
 
     # 5. Flussi Origine → Destinazione
     with tabs[4]:
