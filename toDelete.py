@@ -41,13 +41,14 @@ def main():
         st.info("Carica un file CSV per iniziare.")
         return
 
+    # Caricamento con opzioni
     data = uploaded.read()
     df, error = load_csv(data, sep, enc, na_list)
     if error:
         st.error(f"Errore lettura CSV: {error}")
         return
 
-    # Estrazioni iniziali
+    # Estrazioni: Origine/Destinazione e Targa
     if 'Sequenza delle strutture' in df.columns:
         seq = df['Sequenza delle strutture'].astype(str).str.split('->', expand=True)
         df['Origine'] = seq[0]
@@ -62,10 +63,10 @@ def main():
         df['Costo_Num'] = pd.NA
         st.warning("Colonna 'Costo stimato' non trovata, 'Costo_Num' impostata a NA.")
 
-    # Filtri dinamici
+    # Filtri dinamici di Stato e Corriere
     st.sidebar.header("Filtri Viaggi")
-    stati = list(df['Stato'].unique()) if 'Stato' in df.columns else []
-    corrieri = list(df['Corriere'].unique()) if 'Corriere' in df.columns else []
+    stati = df['Stato'].unique().tolist() if 'Stato' in df.columns else []
+    corrieri = df['Corriere'].unique().tolist() if 'Corriere' in df.columns else []
     sel_stati = st.sidebar.multiselect("Stato", stati, default=stati)
     sel_corrieri = st.sidebar.multiselect("Corriere", corrieri, default=corrieri)
     filtered = df[df['Stato'].isin(sel_stati) & df['Corriere'].isin(sel_corrieri)]
@@ -92,7 +93,7 @@ def main():
         counts.columns = ['Stato', 'Conteggio']
         chart = alt.Chart(counts).mark_bar().encode(
             x=alt.X('Stato:N', sort='-y'),
-            y='Conteggio:Q',
+            y=alt.Y('Conteggio:Q'),
             color='Stato:N',
             tooltip=['Stato', 'Conteggio']
         )
@@ -129,7 +130,7 @@ def main():
         st.dataframe(top)
         bar = alt.Chart(top).mark_bar().encode(
             x=alt.X('Conducente:N', sort='-y'),
-            y='Totale:Q',
+            y=alt.Y('Totale:Q'),
             tooltip=[
                 alt.Tooltip('Conducente:N', title='Autista'),
                 alt.Tooltip('Totale:Q', title='Totale (€)'),
@@ -139,4 +140,6 @@ def main():
         )
         st.altair_chart(bar, use_container_width=True)
 
-if __name__ == '__main__':
+# Entry point
+if __name__ == "__main__":
+    main()
