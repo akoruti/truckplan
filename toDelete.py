@@ -1,139 +1,113 @@
-import streamlit as st
 import pandas as pd
-import numpy as np
-from PIL import Image
+from datetime import datetime, timedelta
 
-# Try to import pytesseract for OCR; if unavailable, disable OCR functionality
-try:
-    import pytesseract
-    OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
+class TripScheduler:
+    def __init__(self, fuel_consumption=3.5, fuel_price=1.69, toll_rates=None):
+        """
+        fuel_consumption: km per liter
+        fuel_price: euro per liter
+        toll_rates: dict with tuple (start, end) as key and toll cost as value
+        """
+        self.trips = []
+        self.df = pd.DataFrame()
+        self.fuel_consumption = fuel_consumption
+        self.fuel_price = fuel_price
+        self.toll_rates = toll_rates or {}
 
-# --- Config ---
-st.set_page_config(page_title="Programmazione Viaggi", layout="wide")
-
-st.title("Programmazione Viaggi Autista")
-st.markdown("Tutte le regole di layout, riga totale, costi, selezione e OCR (se disponibile) sono applicate automaticamente.")
-
-# --- Funzione OCR dati autista ---
-if OCR_AVAILABLE:
-    def estrai_dati_autista_da_immagine(image_file):
-        img = Image.open(image_file)
-        testo = pytesseract.image_to_string(img, lang='ita+eng')
-        estratti = {
-            "Nome autista": "",
-            "Inizio settimana": "",
-            "Ore guida residue settimana": "",
-            "Ore guida residue oggi": "",
-            "Guida ininterrotta residua": "",
-            "Pausa obbligatoria residua": "",
-            "Ultima posizione GPS": ""
+    def add_trip(self, codice, partenza, dt_p, destinazione, dt_a,
+                 distanza_km, durata_est, compenso_eur, eur_per_km,
+                 rimorchio, modalita):
+        trip = {
+            "Codice Viaggio": codice,
+            "Partenza": partenza,
+            "Data/Ora Partenza": dt_p,
+            "Destinazione": destinazione,
+            "Data/Ora Arrivo": dt_a,
+            "Distanza": distanza_km,
+            "Durata stimata": durata_est,
+            "Compenso (€)": compenso_eur,
+            "€/km": eur_per_km,
+            "Rimorchio": rimorchio,
+            "Modalità": modalita
         }
-        for line in testo.splitlines():
-            l = line.lower()
-            if "nome" in l or "autista" in l:
-                estratti["Nome autista"] = line.split(":")[-1].strip()
-            elif "settimana" in l:
-                estratti["Inizio settimana"] = line.split(":")[-1].strip()
-            elif "residue settimana" in l:
-                estratti["Ore guida residue settimana"] = line.split(":")[-1].strip()
-            elif "oggi" in l and "guida" in l:
-                estratti["Ore guida residue oggi"] = line.split(":")[-1].strip()
-            elif "ininterrotta" in l:
-                estratti["Guida ininterrotta residua"] = line.split(":")[-1].strip()
-            elif "pausa" in l:
-                estratti["Pausa obbligatoria residua"] = line.split(":")[-1].strip()
-            elif "gps" in l or "posizione" in l:
-                estratti["Ultima posizione GPS"] = line.split(":")[-1].strip()
-        return estratti
-else:
-    def estrai_dati_autista_da_immagine(image_file):
-        st.warning("OCR non disponibile: installa pytesseract per abilitare l'estrazione.")
-        return {}
+        self.trips.append(trip)
+        self._update_df()
 
-# --- Dati Autista (Sidebar) ---
-st.sidebar.header("Dati Autista")
+    def _update_df(self):
+        self.df = pd.DataFrame(self.trips)
 
-if OCR_AVAILABLE:
-    uploaded_image = st.sidebar.file_uploader("Carica screenshot dati autista (jpg/png)", type=["jpg", "jpeg", "png"] )
-    dati_autista = {}
-    if uploaded_image:
-        with st.spinner("Estrazione dati da immagine..."):
-            dati_autista = estrai_dati_autista_da_immagine(uploaded_image)
-        st.sidebar.success("Dati autista estratti dall'immagine!")
-else:
-    dati_autista = {}
+    def compute_costs(self):
+        def fuel_cost(km):
+            liters = km / self.fuel_consumption
+            return round(liters * self.fuel_price, 2)
+        def toll_cost(row):
+            key = (row['Partenza'], row['Destinazione'])
+            return self.toll_rates.get(key, 0.0)
+        self.df['Carburante (€)'] = self.df['Distanza'].apply(fuel_cost)
+        self.df['Pedaggi (€)'] = self.df.apply(toll_cost, axis=1)
+        self.df['Totale costi (€)'] = self.df['Carburante (€)'] + self.df['Pedaggi (€)']
 
-autista_nome = st.sidebar.text_input("Nome autista", dati_autista.get("Nome autista", "S.Pituscan"))
-inizio_settimana = st.sidebar.text_input("Inizio settimana lavorativa", dati_autista.get("Inizio settimana", "2025-07-09"))
-ora_inizio_sett = st.sidebar.text_input("Ora inizio settimana", dati_autista.get("Ora inizio settimana","07:00"))
-ore_guida_sett = st.sidebar.text_input("Ore guida residue settimana", dati_autista.get("Ore guida residue settimana","56"))
-ore_guida_giorno = st.sidebar.text_input("Ore guida residue oggi", dati_autista.get("Ore guida residue oggi","9"))
-tempo_guida_ininterrotta = st.sidebar.text_input("Guida ininterrotta residua (min)", dati_autista.get("Guida ininterrotta residua","270"))
-pausa_necessaria = st.sidebar.text_input("Pausa obbligatoria residua (min)", dati_autista.get("Pausa obbligatoria residua","45"))
-posizione_gps = st.sidebar.text_input("Ultima posizione GPS (lat, lon)", dati_autista.get("Ultima posizione GPS","45.7636166, 10.9984833"))
+    def compute_totals(self):
+        total_km = self.df['Distanza'].sum()
+        total_comp = self.df['Compenso (€)'].sum()
+        avg_eur_km = round(total_comp / total_km, 2) if total_km else 0
+        total_fuel = self.df['Carburante (€)'].sum()
+        total_toll = self.df['Pedaggi (€)'].sum()
+        total_costs = total_fuel + total_toll
+        return {
+            "TOTALE": {
+                "Distanza": total_km,
+                "Compenso (€)": total_comp,
+                "€/km": avg_eur_km,
+                "Carburante (€)": total_fuel,
+                "Pedaggi (€)": total_toll,
+                "Totale costi (€)": total_costs
+            }
+        }
 
-st.sidebar.markdown("---")
-st.sidebar.write(f"**Autista:** {autista_nome}")
-st.sidebar.write(f"Posizione GPS: {posizione_gps}")
-st.sidebar.write(f"Inizio settimana: {inizio_settimana} {ora_inizio_sett}")
-st.sidebar.write(f"Ore guida residue settimana: {ore_guida_sett}")
-st.sidebar.write(f"Ore guida residue oggi: {ore_guida_giorno}")
-st.sidebar.write(f"Guida ininterrotta residua: {tempo_guida_ininterrotta} min")
-st.sidebar.write(f"Pausa obbligatoria residua: {pausa_necessaria} min")
+    def append_totals_row(self):
+        totals = self.compute_totals()["TOTALE"]
+        totals_row = {"Codice Viaggio": "TOTALE"}
+        for k, v in totals.items():
+            totals_row[k] = v
+        for col in self.df.columns:
+            if col not in totals_row:
+                totals_row[col] = ""
+        self.df = pd.concat([self.df, pd.DataFrame([totals_row])], ignore_index=True)
 
-# --- Carica dati viaggi ---
-st.subheader("1. Carica i viaggi disponibili")
-uploaded_file = st.file_uploader("Carica file CSV o Excel", type=["csv", "xlsx"])
-if uploaded_file:
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
-else:
-    df = pd.DataFrame()
+    def save_csv(self, path):
+        self.df.to_csv(path, index=False)
 
-# --- Parametri costi ---
-st.sidebar.header("Parametri costi")
-prezzo_gasolio = st.sidebar.number_input("Prezzo gasolio €/l", 1.0, 3.0, 1.69, step=0.01)
-consumo_km_l = st.sidebar.number_input("Consumo medio (km/l)", 2.0, 6.0, 3.5, step=0.1)
-st.sidebar.markdown("*Pedaggi stimati manualmente, aggiornali se hai dati precisi.*")
+    def next_available(self, last_arrival_str, unload_min=45, rest_h=11):
+        last_arrival = datetime.strptime(last_arrival_str, "%Y-%m-%d %H:%M")
+        end_unload = last_arrival + timedelta(minutes=unload_min)
+        available = end_unload + timedelta(hours=rest_h)
+        return available
 
-# --- Calcolo costi ---
-def stima_carburante(d, km_l, p): return round(d/km_l*p,2)
-if "Distanza" in df.columns and "Compenso (€)" in df.columns:
-    if "Carburante (€)" not in df.columns:
-        df["Carburante (€)"] = df["Distanza"].apply(lambda x: stima_carburante(x, consumo_km_l, prezzo_gasolio))
-    if "Pedaggi (€)" not in df.columns:
-        df["Pedaggi (€)"] = 0
-    df["Totale costi (€)"] = df["Carburante (€)"] + df["Pedaggi (€)"]
+    def select_compatible_routes(self, routes_df, available_time, 
+                                 min_eur_km=None, min_comp=None, min_dist=None, top_n=5):
+        """
+        Filtra le rotte disponibili in base alla disponibilità dell'autista e ai criteri
+        parameters:
+            routes_df: DataFrame con colonne ['Partenza','Data/Ora Partenza','Destinazione','Distanza','Compenso (€)','€/km',...]
+            available_time: datetime quando l'autista è libero
+            min_eur_km: filtro minimo €/km
+            min_comp: filtro minimo compenso
+            min_dist: filtro minimo distanza in km
+            top_n: numero di rotte da restituire
+        returns:
+            DataFrame con le prime top_n rotte compatibili ordinate per compenso poi €/km
+        """
+        df = routes_df.copy()
+        df['Data/Ora Partenza'] = pd.to_datetime(df['Data/Ora Partenza'], format="%Y-%m-%d %H:%M")
+        df = df[df['Data/Ora Partenza'] >= available_time]
+        if min_eur_km is not None:
+            df = df[df['€/km'] >= min_eur_km]
+        if min_comp is not None:
+            df = df[df['Compenso (€)'] >= min_comp]
+        if min_dist is not None:
+            df = df[df['Distanza'] >= min_dist]
+        df = df.sort_values(by=['Compenso (€)','€/km'], ascending=False)
+        return df.head(top_n)
 
-# --- Tabella Programmazione ---
-st.subheader("2. Programmazione Viaggi (modificabile)")
-if df.empty:
-    st.info("Carica un file o inserisci i viaggi manualmente con il tasto + nella tabella.")
-edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-
-# --- Riga Totale ---
-if not edited_df.empty:
-    tot = edited_df.copy()
-    tot_row = {col: "" for col in tot.columns}
-    tot_row["Codice Viaggio"] = "TOTALE"
-    tot_row["Distanza"] = tot["Distanza"].sum()
-    tot_row["Compenso (€)"] = tot["Compenso (€)"].sum()
-    tot_row["€/km"] = round(tot["Compenso (€)"].sum()/tot["Distanza"].sum(),2) if tot["Distanza"].sum() else ""
-    if "Carburante (€)" in tot.columns:
-        tot_row["Carburante (€)"] = tot["Carburante (€)"].sum()
-    if "Pedaggi (€)" in tot.columns:
-        tot_row["Pedaggi (€)"] = tot["Pedaggi (€)"].sum()
-    if "Totale costi (€)" in tot.columns:
-        tot_row["Totale costi (€)" ] = tot["Totale costi (€)"].sum()
-    full = pd.concat([tot, pd.DataFrame([tot_row])], ignore_index=True)
-    st.dataframe(full, use_container_width=True)
-
-# --- Esporta CSV ---
-st.download_button("Scarica CSV", data=full.to_csv(index=False), file_name="programmazione_viaggi.csv")
-
-st.success("App pronta! Moduli OCR e regole applicate.")
 
