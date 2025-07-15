@@ -10,9 +10,10 @@ desired_order = [
     "DATA ORA ARRIVO",
     "PARTENZA",
     "ARRIVO",
-    # aggiungi qui altre colonne se ti servono ancora
+    # aggiungi qui altre colonne se necessario
 ]
 
+# Mappatura per rinominare le colonne
 rename_dict = {
     "Unnamed: 0": "DATA ORA PARTENZA",
     "ORARIO": "DATA ORA ARRIVO",
@@ -24,29 +25,28 @@ now = datetime.datetime.now()
 st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
 
 st.divider()
-st.title("Visualizza e filtra per intervallo di date di partenza")
+st.title("Visualizza e filtra le date di partenza")
 
 # --- Uploader CSV ---
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
 if not uploaded_file:
-    st.info("📂 Nessun file caricato. Usa il pulsante qui sopra per selezionare il CSV.")
+    st.info("📂 Nessun file caricato. Carica un CSV per procedere.")
     st.stop()
 
-# --- 1) Caricamento raw e preview ---
+# --- Caricamento dati ---
 df = pd.read_csv(uploaded_file)
-st.subheader("Anteprima dati (raw)")
-st.dataframe(df.head(5))
 
-# --- 2) Rinomina colonne e reorder ---
+# --- Visualizza l'intero contenuto caricato ---
+st.subheader("Dati caricati (tutti)")
+st.dataframe(df)
+
+# --- Rinomina e riordina colonne ---
 df = df.rename(columns=rename_dict)
-# metti le desired_order in testa, poi il resto
 rest_columns = [c for c in df.columns if c not in desired_order]
 ordered_columns = [c for c in desired_order if c in df.columns] + rest_columns
 df = df[ordered_columns]
-st.subheader("Anteprima dopo rename e riordino colonne")
-st.dataframe(df.head(5))
 
-# --- 3) Parsing date in formato europeo (dd/mm/yyyy) ---
+# --- Parsing "DATA ORA PARTENZA" in formato europeo ---
 if "DATA ORA PARTENZA" in df.columns:
     df["DATA ORA PARTENZA"] = pd.to_datetime(
         df["DATA ORA PARTENZA"],
@@ -57,43 +57,44 @@ else:
     st.error("La colonna 'DATA ORA PARTENZA' non è stata trovata.")
     st.stop()
 
-# --- 4) Selettore intervallo in formato US (MM/DD/YYYY) ---
-st.subheader("🔍 Filtra per intervallo di date di partenza (MM/DD/YYYY)")
+# --- Selettore intervallo di date (formato europeo) ---
+st.subheader("🔍 Filtra per intervallo di date di partenza")
 valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
 default_start = valid_dates.min() if not valid_dates.empty else now.date()
-default_end = valid_dates.max() if not valid_dates.empty else now.date()
+default_end   = valid_dates.max() if not valid_dates.empty else now.date()
 
 start_date = st.date_input(
-    "Select start date",
+    "Data di inizio",
     value=default_start,
-    format="MM/DD/YYYY",
+    format="DD/MM/YYYY",
     key="start_date"
 )
 end_date = st.date_input(
-    "Select end date",
+    "Data di fine",
     value=default_end,
-    format="MM/DD/YYYY",
+    format="DD/MM/YYYY",
     key="end_date"
 )
+
 if start_date > end_date:
-    st.error("The start date must be on or before the end date.")
+    st.error("La data di inizio deve essere minore o uguale alla data di fine.")
     st.stop()
 
-# --- 5) Filtro e visualizzazione finale ---
+# --- Filtraggio dei dati ---
 df["SOLO DATA"] = df["DATA ORA PARTENZA"].dt.date
 mask = (df["SOLO DATA"] >= start_date) & (df["SOLO DATA"] <= end_date)
 filtered_df = df[mask].drop(columns=["SOLO DATA"])
 
+# --- Visualizzazione risultati ---
+st.subheader("Risultato del filtro")
 if filtered_df.empty:
     st.warning(
-        f"No departures found between "
-        f"{start_date.strftime('%m/%d/%Y')} and {end_date.strftime('%m/%d/%Y')}."
+        f"Nessuna partenza trovata tra "
+        f"{start_date.strftime('%d/%m/%Y')} e {end_date.strftime('%d/%m/%Y')}."
     )
-else:
-    st.subheader("Risultato del filtro")
 st.dataframe(filtered_df)
 
-# --- 6) Download del CSV filtrato ---
+# --- Download del CSV filtrato ---
 buffer = io.BytesIO()
 filtered_df.to_csv(buffer, index=False)
 st.download_button(
@@ -105,6 +106,5 @@ st.download_button(
     ),
     mime="text/csv"
 )
-
 
 
