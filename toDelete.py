@@ -7,23 +7,23 @@ from zoneinfo import ZoneInfo  # Python 3.9+
 # --- Configurazione pagina ---
 st.set_page_config(page_title="Gestione Viaggi", layout="wide")
 
-# --- Ordine delle colonne desiderato ---
+# --- Ordine desiderato delle colonne ---
 desired_order = [
     "AUTISTA",
     "DATA ORA PARTENZA",
     "DATA ORA ARRIVO",
     "PARTENZA",
     "ARRIVO",
-    # aggiungi qui altre colonne se serve
+    # puoi aggiungere altre colonne qui
 ]
 
-# --- Mappatura per rinominare colonne ---
+# --- Rinomina colonne da Google Sheets ---
 rename_dict = {
     "Unnamed: 0": "DATA ORA PARTENZA",
     "ORARIO": "DATA ORA ARRIVO",
 }
 
-# --- LIVE CLOCK in fuso Italia ---
+# --- Mostra clock in fuso Italia ---
 now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
 st.markdown("## 🕒 Data e ora attuali (Europa/Roma)")
 st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
@@ -31,10 +31,11 @@ st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
 st.divider()
 st.title("Visualizzazione Viaggi (prime oggi, highlight partenza)")
 
-# --- Mantieni il DataFrame in memoria ---
+# --- Session state per mantenere i dati ---
 if "df" not in st.session_state:
     st.session_state.df = None
 
+# --- Caricamento CSV ---
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
@@ -46,60 +47,58 @@ if st.session_state.df is not None:
     df = st.session_state.df.copy()
 
     # 1) Riordina colonne
-    rest_cols   = [c for c in df.columns if c not in desired_order]
-    ordered_cols= [c for c in desired_order if c in df.columns] + rest_cols
+    rest_cols    = [c for c in df.columns if c not in desired_order]
+    ordered_cols = [c for c in desired_order if c in df.columns] + rest_cols
     df = df[ordered_cols]
 
-    # 2) Crea colonna datetime per il confronto
-    df["__DEP_DT__"] = (
+    # 2) Crea datetime di partenza e serie di highlight
+    dep_dt = (
         pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
           .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
     )
+    # Booleano: True se differenza < 60 secondi
+    now_r = datetime.datetime.now(ZoneInfo("Europe/Rome"))
+    highlight_series = (dep_dt - now_r).abs().dt.total_seconds() < 60
 
-    # 3) Ordina decrescente per DATA ORA PARTENZA
-    df = df.sort_values("__DEP_DT__", ascending=False)
+    # 3) Ordina decrescente per data partenza
+    df["__DEP_SORT__"] = dep_dt
+    df = df.sort_values("__DEP_SORT__", ascending=False).drop(columns="__DEP_SORT__")
 
-    # 4) Funzione per evidenziare la riga di partenza
-    def highlight_departure(row):
-        dt = row["__DEP_DT__"]
-        if pd.notna(dt):
-            # se la differenza con ora corrente è < 60s
-            diff = abs((dt - datetime.datetime.now(ZoneInfo("Europe/Rome"))).total_seconds())
-            if diff < 60:
-                return ["background-color: lightgreen"] * len(row)
+    # 4) Prepara DataFrame da mostrare (senza colonna interna)
+    display_df = df.copy()
+
+    # 5) Funzione di styling
+    def highlight_row(row):
+        if highlight_series.loc[row.name]:
+            return ["background-color: lightgreen"] * len(row)
         return [""] * len(row)
 
-    # 5) Applica lo stile e nascondi la colonna interna
-    styled = (
-        df.style
-          .apply(highlight_departure, axis=1)
-          .hide(columns="__DEP_DT__")
-    )
+    styled = display_df.style.apply(highlight_row, axis=1)
 
-    # 6) Mostra la tabella styled
+    # 6) Render della tabella
     st.subheader(f"Tabella – prime le partenze del {now.strftime('%d/%m/%Y')}")
     st.dataframe(styled, use_container_width=True)
 
-    # 7) Pulsante per scaricare il CSV riordinato (senza la colonna interna)
-    out = io.BytesIO()
-    df.drop(columns="__DEP_DT__").to_csv(out, index=False)
+    # 7) Download CSV pulito
+    buffer = io.BytesIO()
+    display_df.to_csv(buffer, index=False)
     st.download_button(
-        "📥 Scarica CSV ordinato e filtrato",
-        data=out.getvalue(),
+        label="📥 Scarica CSV aggiornato",
+        data=buffer.getvalue(),
         file_name="viaggi_riordinati.csv",
         mime="text/csv"
     )
 else:
     st.info("⏳ In attesa del caricamento di un CSV.")
 
-# --- Auto-reload della pagina ogni secondo per aggiornare il clock e il highlight ---
+# --- Ricarica pagina ogni secondo via JavaScript per aggiornare clock e highlight ---
 st.markdown(
     """
     <script>
       setTimeout(() => { window.location.reload(); }, 1000);
     </script>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
