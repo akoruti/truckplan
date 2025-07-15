@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import datetime
 
-# --- Configurazione colonne ---
+# Ordine desiderato delle colonne
 desired_order = [
     "AUTISTA",
     "DATA ORA PARTENZA",
@@ -25,86 +25,41 @@ now = datetime.datetime.now()
 st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
 
 st.divider()
-st.title("Visualizza e filtra le date di partenza")
+st.title("Visualizza CSV con colonne nell’ordine desiderato (prime oggi)")
 
-# --- Uploader CSV ---
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
-if not uploaded_file:
-    st.info("📂 Nessun file caricato. Carica un CSV per procedere.")
-    st.stop()
 
-# --- Caricamento dati ---
-df = pd.read_csv(uploaded_file)
+if uploaded_file is not None:
+    # 1) Carica e rinomina colonne
+    df = pd.read_csv(uploaded_file)
+    df = df.rename(columns=rename_dict)
+    # 2) Applica l'ordine desiderato
+    rest_columns = [col for col in df.columns if col not in desired_order]
+    ordered_columns = [col for col in desired_order if col in df.columns] + rest_columns
+    df = df[ordered_columns]
 
-# --- Visualizza l'intero contenuto caricato ---
-st.subheader("Dati caricati (tutti)")
-st.dataframe(df)
+    # 3) Metti in cima le righe di oggi
+    if "DATA ORA PARTENZA" in df.columns:
+        # Estrai la sola data (gg/mm/aaaa)
+        df["DATA SOLO DATA"] = df["DATA ORA PARTENZA"].astype(str).str.extract(r"(\d{2}/\d{2}/\d{4})")
+        today_str = now.strftime("%d/%m/%Y")
+        mask_today = df["DATA SOLO DATA"] == today_str
+        df_today = df[mask_today]
+        df_rest = df[~mask_today]
+        df = pd.concat([df_today, df_rest]).drop(columns=["DATA SOLO DATA"])
 
-# --- Rinomina e riordina colonne ---
-df = df.rename(columns=rename_dict)
-rest_columns = [c for c in df.columns if c not in desired_order]
-ordered_columns = [c for c in desired_order if c in df.columns] + rest_columns
-df = df[ordered_columns]
+    # 4) Mostra la tabella
+    st.subheader(f"Tabella – prime le partenze del {now.strftime('%d/%m/%Y')}")
+    st.dataframe(df)
 
-# --- Parsing "DATA ORA PARTENZA" in formato europeo ---
-if "DATA ORA PARTENZA" in df.columns:
-    df["DATA ORA PARTENZA"] = pd.to_datetime(
-        df["DATA ORA PARTENZA"],
-        dayfirst=True,
-        errors="coerce"
+    # 5) Pulsante per scaricare il CSV riordinato
+    output = io.BytesIO()
+    df.to_csv(output, index=False)
+    st.download_button(
+        label="Scarica CSV riordinato",
+        data=output.getvalue(),
+        file_name="dati_riordinati.csv",
+        mime="text/csv"
     )
 else:
-    st.error("La colonna 'DATA ORA PARTENZA' non è stata trovata.")
-    st.stop()
-
-# --- Selettore intervallo di date (formato europeo) ---
-st.subheader("🔍 Filtra per intervallo di date di partenza")
-valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
-default_start = valid_dates.min() if not valid_dates.empty else now.date()
-default_end   = valid_dates.max() if not valid_dates.empty else now.date()
-
-start_date = st.date_input(
-    "Data di inizio",
-    value=default_start,
-    format="DD/MM/YYYY",
-    key="start_date"
-)
-end_date = st.date_input(
-    "Data di fine",
-    value=default_end,
-    format="DD/MM/YYYY",
-    key="end_date"
-)
-
-if start_date > end_date:
-    st.error("La data di inizio deve essere minore o uguale alla data di fine.")
-    st.stop()
-
-# --- Filtraggio dei dati ---
-df["SOLO DATA"] = df["DATA ORA PARTENZA"].dt.date
-mask = (df["SOLO DATA"] >= start_date) & (df["SOLO DATA"] <= end_date)
-filtered_df = df[mask].drop(columns=["SOLO DATA"])
-
-# --- Visualizzazione risultati ---
-st.subheader("Risultato del filtro")
-if filtered_df.empty:
-    st.warning(
-        f"Nessuna partenza trovata tra "
-        f"{start_date.strftime('%d/%m/%Y')} e {end_date.strftime('%d/%m/%Y')}."
-    )
-st.dataframe(filtered_df)
-
-# --- Download del CSV filtrato ---
-buffer = io.BytesIO()
-filtered_df.to_csv(buffer, index=False)
-st.download_button(
-    "Scarica CSV filtrato",
-    data=buffer.getvalue(),
-    file_name=(
-        f"dati_{start_date.strftime('%Y%m%d')}_"
-        f"{end_date.strftime('%Y%m%d')}.csv"
-    ),
-    mime="text/csv"
-)
-
-
+    st.info("Carica un file CSV per visualizzare i dati.")
