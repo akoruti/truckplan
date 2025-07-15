@@ -40,12 +40,12 @@ rest_columns = [col for col in df.columns if col not in desired_order]
 ordered_columns = [col for col in desired_order if col in df.columns] + rest_columns
 df = df[ordered_columns]
 
-# Parsing "DATA ORA PARTENZA" come datetime europeo (dayfirst per il CSV originale)
+# Parsing "DATA ORA PARTENZA" come datetime europeo
 if "DATA ORA PARTENZA" in df.columns:
     df["DATA ORA PARTENZA"] = pd.to_datetime(
         df["DATA ORA PARTENZA"],
         dayfirst=True,
-        errors="coerce",
+        errors="coerce"
     )
 else:
     st.error("La colonna 'DATA ORA PARTENZA' non è stata trovata.")
@@ -55,7 +55,7 @@ else:
 st.subheader("🔍 Scegli intervallo di date di partenza (MM/DD/YYYY)")
 valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
 default_start = valid_dates.min() if not valid_dates.empty else now.date()
-default_end   = valid_dates.max() if not valid_dates.empty else now.date()
+default_end = valid_dates.max() if not valid_dates.empty else now.date()
 
 start_date = st.date_input(
     "Select start date",
@@ -80,21 +80,5 @@ df["SOLO DATA"] = df["DATA ORA PARTENZA"].dt.date
 mask = (df["SOLO DATA"] >= start_date) & (df["SOLO DATA"] <= end_date)
 filtered_df = df[mask].drop(columns=["SOLO DATA"])
 
-# Messaggio se non ci sono righe
-if filtered_df.empty:
-    st.warning(f"No departures found between {start_date.strftime('%m/%d/%Y')} and {end_date.strftime('%m/%d/%Y')}.")
 
-# --- Visualizzazione e download ---
-st.subheader("Tabella filtrata e riordinata")
-st.dataframe(filtered_df)
 
-buffer = io.BytesIO()
-filtered_df.to_csv(buffer, index=False)
-st.download_button(
-    "Scarica CSV filtrato",
-    data=buffer.getvalue(),
-    file_name=f"dati_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)
-
-)
