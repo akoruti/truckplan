@@ -2,10 +2,14 @@ import streamlit as st
 import pandas as pd
 import io
 import datetime
-from zoneinfo import ZoneInfo  # Python 3.9+
+from zoneinfo import ZoneInfo
+from streamlit_autorefresh import st_autorefresh
 
 # --- Configurazione pagina ---
 st.set_page_config(page_title="Gestione Viaggi", layout="wide")
+
+# --- Auto‐refresh solo per clock/highlight ---
+st_autorefresh(interval=1000, key="refresh")
 
 # --- Ordine desiderato delle colonne ---
 desired_order = [
@@ -19,7 +23,7 @@ desired_order = [
 # --- Rinomina colonne da Google Sheets ---
 rename_dict = {
     "Unnamed: 0": "DATA ORA PARTENZA",
-    "ORARIO": "DATA ORA ARRIVO",
+    "ORARIO":     "DATA ORA ARRIVO",
 }
 
 # --- Live clock in fuso Europa/Roma ---
@@ -41,7 +45,7 @@ if uploaded_file:
     df = df.rename(columns=rename_dict)
     st.session_state.df = df
 
-# --- Se ci sono dati, processali ---
+# --- Elaborazione dati se presenti ---
 if st.session_state.df is not None:
     df = st.session_state.df.copy()
 
@@ -51,14 +55,15 @@ if st.session_state.df is not None:
     df = df[cols]
 
     # 2) Crea datetime di partenza e flag per highlight
-    dep_dt = pd.to_datetime(
-        df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce"
-    ).dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
+    dep_dt = (
+        pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
+          .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
+    )
     dep_min = dep_dt.dt.strftime("%d/%m/%Y %H:%M")
     now_min = now.strftime("%d/%m/%Y %H:%M")
     highlight_flag = dep_min == now_min
 
-    # 3) Ordina decrescente per partenza
+    # 3) Ordina decrescente per DATA ORA PARTENZA
     df["__SORT__"] = dep_dt
     df = df.sort_values("__SORT__", ascending=False).drop(columns="__SORT__")
 
@@ -68,7 +73,7 @@ if st.session_state.df is not None:
 
     styled = df.style.apply(hl_row, axis=1)
 
-    # 5) Mostra la tabella con altezza fissa per scroll
+    # 5) Mostra la tabella con scroll (altezza 600px)
     st.subheader(f"Tutte le partenze – {now.strftime('%d/%m/%Y')}")
     st.dataframe(styled, use_container_width=True, height=600)
 
@@ -79,12 +84,5 @@ if st.session_state.df is not None:
 
 else:
     st.info("⏳ Carica un CSV per visualizzare i viaggi.")
-
-# --- Auto‐reload della pagina ogni secondo (aggiorna clock e highlight) ---
-st.markdown("""
-<script>
-  setTimeout(() => { window.location.reload(); }, 1000);
-</script>
-""", unsafe_allow_html=True)
 
 
