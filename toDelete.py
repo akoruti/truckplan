@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 import datetime
+import time
 from zoneinfo import ZoneInfo  # Python 3.9+
-from streamlit_autorefresh import st_autorefresh  # pip install streamlit-autorefresh
 
 # --- Configurazione pagina ---
 st.set_page_config(page_title="Gestione Viaggi", layout="wide")
@@ -24,18 +24,20 @@ rename_dict = {
     "ORARIO": "DATA ORA ARRIVO",
 }
 
-# --- Auto-refresh del clock (ogni 1 secondo) ---
-st_autorefresh(interval=1000, key="refresh_clock")
+# --- Live clock con fuso Italia ---
+clock_placeholder = st.empty()
+def show_clock():
+    now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
+    clock_placeholder.markdown("## 🕒 Data e ora attuali (Europa/Roma)")
+    clock_placeholder.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
+    return now
 
-# --- Live clock in fuso Italia ---
-now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
-st.markdown("## 🕒 Data e ora attuali (Europa/Roma)")
-st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
+now = show_clock()
 
 st.divider()
 st.title("Visualizzazione Viaggi (prime oggi)")
 
-# --- Mantieni il DataFrame in memoria fino a nuovo upload ---
+# --- Mantieni il DataFrame in memoria ---
 if "df" not in st.session_state:
     st.session_state.df = None
 
@@ -45,39 +47,43 @@ if uploaded_file is not None:
     df = df.rename(columns=rename_dict)
     st.session_state.df = df
 
-# Se c'è un DataFrame in session_state, lo elaboriamo
+# --- Se c'è un DataFrame, elaboralo ---
 if st.session_state.df is not None:
     df = st.session_state.df.copy()
     
-    # 1) Riordina le colonne
+    # 1) Riordina colonne
     rest_cols = [c for c in df.columns if c not in desired_order]
     ordered_cols = [c for c in desired_order if c in df.columns] + rest_cols
     df = df[ordered_cols]
     
-    # 2) Metti in cima le righe con DATA ORA PARTENZA di oggi (fuso Italia)
+    # 2) Porta in cima le righe con DATA ORA PARTENZA = oggi
     if "DATA ORA PARTENZA" in df.columns:
         df["DATA SOLO"] = (
             pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
-            .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
-            .dt.strftime("%d/%m/%Y")
+              .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
+              .dt.strftime("%d/%m/%Y")
         )
         today_str = now.strftime("%d/%m/%Y")
         df_today = df[df["DATA SOLO"] == today_str]
         df_rest  = df[df["DATA SOLO"] != today_str]
         df = pd.concat([df_today, df_rest]).drop(columns=["DATA SOLO"])
     
-    # 3) Mostra la tabella
+    # 3) Mostra tabella e download
     st.subheader(f"Tabella – prime le partenze del {now.strftime('%d/%m/%Y')}")
     st.dataframe(df, use_container_width=True)
     
-    # 4) Pulsante per scaricare il CSV riordinato
-    out_buffer = io.BytesIO()
-    df.to_csv(out_buffer, index=False)
+    buffer = io.BytesIO()
+    df.to_csv(buffer, index=False)
     st.download_button(
         label="📥 Scarica CSV riordinato",
-        data=out_buffer.getvalue(),
+        data=buffer.getvalue(),
         file_name="viaggi_riordinati.csv",
         mime="text/csv"
     )
 else:
     st.info("⏳ In attesa del caricamento di un CSV.")
+
+# --- Rinfresca l'orologio ogni secondo ---
+time.sleep(1)
+st.experimental_rerun()
+
