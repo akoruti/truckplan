@@ -10,7 +10,7 @@ desired_order = [
     "DATA ORA ARRIVO",
     "PARTENZA",
     "ARRIVO",
-    # altre colonne se vuoi
+    # aggiungi qui eventuali altre colonne preferite
 ]
 
 rename_dict = {
@@ -18,13 +18,13 @@ rename_dict = {
     "ORARIO": "DATA ORA ARRIVO",
 }
 
-# LIVE CLOCK
+# --- LIVE CLOCK ---
 st.markdown("## 🕒 Data e ora attuali")
 now = datetime.datetime.now()
 st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
 
 st.divider()
-st.title("Visualizza CSV con colonne nell’ordine desiderato")
+st.title("Visualizza CSV con colonne nell’ordine desiderato (prima le partenze di oggi)")
 
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
 
@@ -37,8 +37,4 @@ if uploaded_file is not None:
 
     # --- Filtra per DATA ORA PARTENZA del giorno corrente ---
     if 'DATA ORA PARTENZA' in df.columns:
-        # Prova a estrarre la sola data (no ora) come stringa
-        df['DATA SOLO DATA'] = df['DATA ORA PARTENZA'].astype(str).str.extract(r'(\d{2}/\d{2}/\d{4})')
-        today_str = now.strftime('%d/%m/%Y')
-        mask_today = df['DATA SOLO DATA'] == to_
-
+        # Estrae solo la data (gg/mm/aaaa) dall'inizio della ce
