@@ -21,10 +21,10 @@ rename_dict = {
 # --- LIVE CLOCK ---
 st.markdown("## 🕒 Data e ora attuali")
 now = datetime.datetime.now()
-st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
+st.info(f"**{now.strftime('%m/%d/%Y %H:%M:%S')}**")  # mostrato in US per coerenza
 
 st.divider()
-st.title("Visualizza e filtra per intervallo di date di partenza (formato europeo)")
+st.title("Visualizza e filtra per intervallo di date di partenza (formato US)")
 
 # --- Uploader CSV ---
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
@@ -40,11 +40,11 @@ rest_columns = [col for col in df.columns if col not in desired_order]
 ordered_columns = [col for col in desired_order if col in df.columns] + rest_columns
 df = df[ordered_columns]
 
-# Parsing "DATA ORA PARTENZA" come datetime europeo
+# Parsing "DATA ORA PARTENZA" in formato US (MM/DD/YYYY)
 if "DATA ORA PARTENZA" in df.columns:
     df["DATA ORA PARTENZA"] = pd.to_datetime(
         df["DATA ORA PARTENZA"],
-        dayfirst=True,
+        dayfirst=False,    # month/day/year
         errors="coerce",
     )
 else:
@@ -53,40 +53,7 @@ else:
 
 # --- Selettore intervallo di date ---
 st.subheader("🔍 Scegli intervallo di date di partenza")
-# Estraiamo le date valide (drop NA) prima di calcolare min/max
+# Estrai date valide per default range
 valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
 default_start = valid_dates.min() if not valid_dates.empty else now.date()
-default_end   = valid_dates.max() if not valid_dates.empty else now.date()
-
-start_date, end_date = st.date_input(
-    "Intervallo",
-    value=(default_start, default_end),
-    format="DD/MM/YYYY",
-)
-
-# Verifica che start_date ≤ end_date
-if start_date > end_date:
-    st.error("La data di inizio deve essere minore o uguale alla data di fine.")
-    st.stop()
-
-# Filtra per intervallo
-df["SOLO DATA"] = df["DATA ORA PARTENZA"].dt.date
-mask = (df["SOLO DATA"] >= start_date) & (df["SOLO DATA"] <= end_date)
-filtered_df = df[mask].drop(columns=["SOLO DATA"])
-
-# Messaggio se non ci sono righe
-if filtered_df.empty:
-    st.warning(f"Nessuna partenza trovata tra {start_date.strftime('%d/%m/%Y')} e {end_date.strftime('%d/%m/%Y')}.")
-
-# --- Visualizzazione e download ---
-st.subheader("Tabella filtrata e riordinata")
-st.dataframe(filtered_df)
-
-buffer = io.BytesIO()
-filtered_df.to_csv(buffer, index=False)
-st.download_button(
-    "Scarica CSV filtrato",
-    data=buffer.getvalue(),
-    file_name=f"dati_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)
+default_end   = valid_dates.max() if not valid_dates.empty else now.d_
