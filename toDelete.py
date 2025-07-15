@@ -52,10 +52,19 @@ if st.session_state.df is not None:
     df = df[ordered_cols]
 
     # 2) Crea datetime di partenza e serie di highlight
-    dep_dt = (
-        pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
-          .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
-    )
+   # converte e imposta fuso
+dep_dt = (
+    pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
+      .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
+)
+
+# formato "gg/mm/aaaa HH:MM"
+dep_min = dep_dt.dt.strftime("%d/%m/%Y %H:%M")
+now_str = datetime.datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y %H:%M")
+
+# True solo se minuti identici
+highlight_flag = dep_min == now_str
+
     # Booleano: True se differenza < 60 secondi
     now_r = datetime.datetime.now(ZoneInfo("Europe/Rome"))
     highlight_series = (dep_dt - now_r).abs().dt.total_seconds() < 60
