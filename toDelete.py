@@ -3,13 +3,9 @@ import pandas as pd
 import io
 import datetime
 from zoneinfo import ZoneInfo
-from streamlit_autorefresh import st_autorefresh
 
 # --- Configurazione pagina ---
 st.set_page_config(page_title="Gestione Viaggi", layout="wide")
-
-# --- Auto‐refresh ogni secondo ---
-st_autorefresh(interval=1000, key="refresh_clock")
 
 # --- Ordine desiderato delle colonne ---
 desired_order = [
@@ -18,7 +14,6 @@ desired_order = [
     "DATA ORA ARRIVO",
     "PARTENZA",
     "ARRIVO",
-    # aggiungi altre colonne se necessario
 ]
 
 # --- Rinomina colonne ---
@@ -28,7 +23,7 @@ rename_dict = {
 }
 
 # --- Ora corrente con fuso Europa/Roma ---
-now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
+now = datetime.datetime.now(ZoneInfo("Europe/Roma"))
 now_str = now.strftime('%d/%m/%Y %H:%M')
 
 # Mostra orologio live
@@ -61,7 +56,7 @@ if st.session_state.df is not None:
     # Converti DATA ORA PARTENZA in datetime con fuso orario
     df['PARTENZA_DT'] = pd.to_datetime(
         df["DATA ORA PARTENZA"], dayfirst=True, errors='coerce'
-    ).dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent='NaT', ambiguous='NaT')
+    ).dt.tz_localize(ZoneInfo("Europe/Roma"), nonexistent='NaT', ambiguous='NaT')
 
     # Ordina decrescente per DATA ORA PARTENZA
     df = df.sort_values(by='PARTENZA_DT', ascending=False)
@@ -94,3 +89,15 @@ if st.session_state.df is not None:
 
 else:
     st.info("ℹ️ In attesa di caricamento CSV...")
+
+# --- Auto-refresh della pagina ogni secondo ---
+st.markdown(
+    """
+    <script>
+        setTimeout(function(){
+            window.location.reload(1);
+        }, 1000);
+    </script>
+    """,
+    unsafe_allow_html=True
+)
