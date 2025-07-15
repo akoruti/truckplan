@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 import io
 import datetime
+from zoneinfo import ZoneInfo  # Python 3.9+
+
+# --- Imposta il fuso orario su Europa/Roma ---
+now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
 
 # Ordine desiderato delle colonne
 desired_order = [
@@ -19,9 +23,8 @@ rename_dict = {
     "ORARIO": "DATA ORA ARRIVO",
 }
 
-# --- LIVE CLOCK ---
-st.markdown("## 🕒 Data e ora attuali")
-now = datetime.datetime.now()
+# --- LIVE CLOCK con fuso Italia ---
+st.markdown("## 🕒 Data e ora attuali (fuso Italia)")
 st.info(f"**{now.strftime('%d/%m/%Y %H:%M:%S')}**")
 
 st.divider()
@@ -33,15 +36,20 @@ if uploaded_file is not None:
     # 1) Carica e rinomina colonne
     df = pd.read_csv(uploaded_file)
     df = df.rename(columns=rename_dict)
+
     # 2) Applica l'ordine desiderato
     rest_columns = [col for col in df.columns if col not in desired_order]
     ordered_columns = [col for col in desired_order if col in df.columns] + rest_columns
     df = df[ordered_columns]
 
-    # 3) Metti in cima le righe di oggi
+    # 3) Metti in cima le righe di oggi (fuso Italia)
     if "DATA ORA PARTENZA" in df.columns:
-        # Estrai la sola data (gg/mm/aaaa)
-        df["DATA SOLO DATA"] = df["DATA ORA PARTENZA"].astype(str).str.extract(r"(\d{2}/\d{2}/\d{4})")
+        # Converte in datetime con dayfirst e fuso, poi formatta la sola data
+        df["DATA SOLO DATA"] = (
+            pd.to_datetime(df["DATA ORA PARTENZA"], dayfirst=True, errors="coerce")
+            .dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent="NaT", ambiguous="NaT")
+            .dt.strftime("%d/%m/%Y")
+        )
         today_str = now.strftime("%d/%m/%Y")
         mask_today = df["DATA SOLO DATA"] == today_str
         df_today = df[mask_today]
@@ -49,7 +57,7 @@ if uploaded_file is not None:
         df = pd.concat([df_today, df_rest]).drop(columns=["DATA SOLO DATA"])
 
     # 4) Mostra la tabella
-    st.subheader(f"Tabella – prime le partenze del {now.strftime('%d/%m/%Y')}")
+    st.subheader(f"Tabella – prime le partenze del {now.strftime('%d/%m/%Y')} (Italia)")
     st.dataframe(df)
 
     # 5) Pulsante per scaricare il CSV riordinato
@@ -63,3 +71,4 @@ if uploaded_file is not None:
     )
 else:
     st.info("Carica un file CSV per visualizzare i dati.")
+
