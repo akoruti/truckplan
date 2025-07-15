@@ -40,6 +40,50 @@ rest_columns = [col for col in df.columns if col not in desired_order]
 ordered_columns = [col for col in desired_order if col in df.columns] + rest_columns
 df = df[ordered_columns]
 
-# Parse "DATA ORA PARTENZA" come datetime europeo
+# Parsing "DATA ORA PARTENZA" come datetime europeo
 if "DATA ORA PARTENZA" in df.columns:
     df["DATA ORA PARTENZA"] = pd.to_datetime(
+        df["DATA ORA PARTENZA"],
+        dayfirst=True,
+        errors="coerce",
+    )
+else:
+    st.error("La colonna 'DATA ORA PARTENZA' non è stata trovata.")
+    st.stop()
+
+# --- Selettore intervallo di date ---
+st.subheader("🔍 Scegli intervallo di date di partenza")
+default_start = df["DATA ORA PARTENZA"].dt.date.min()
+default_end = df["DATA ORA PARTENZA"].dt.date.max()
+start_date, end_date = st.date_input(
+    "Intervallo",
+    value=(default_start, default_end),
+    format="DD/MM/YYYY",
+)
+
+# Verifica che start_date ≤ end_date
+if start_date > end_date:
+    st.error("La data di inizio deve essere minore o uguale alla data di fine.")
+    st.stop()
+
+# Filtra per intervallo
+df["SOLO DATA"] = df["DATA ORA PARTENZA"].dt.date
+mask = (df["SOLO DATA"] >= start_date) & (df["SOLO DATA"] <= end_date)
+filtered_df = df[mask].drop(columns=["SOLO DATA"])
+
+# Messaggio se non ci sono righe
+if filtered_df.empty:
+    st.warning(f"Nessuna partenza trovata tra {start_date.strftime('%d/%m/%Y')} e {end_date.strftime('%d/%m/%Y')}.")
+
+# --- Visualizzazione e download ---
+st.subheader("Tabella filtrata e riordinata")
+st.dataframe(filtered_df)
+
+buffer = io.BytesIO()
+filtered_df.to_csv(buffer, index=False)
+st.download_button(
+    "Scarica CSV filtrato",
+    data=buffer.getvalue(),
+    file_name=f"dati_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv",
+    mime="text/csv",
+)
