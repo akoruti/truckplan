@@ -53,8 +53,11 @@ else:
 
 # --- Selettore intervallo di date ---
 st.subheader("🔍 Scegli intervallo di date di partenza")
-default_start = df["DATA ORA PARTENZA"].dt.date.min()
-default_end = df["DATA ORA PARTENZA"].dt.date.max()
+# Estraiamo le date valide (drop NA) prima di calcolare min/max
+valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
+default_start = valid_dates.min() if not valid_dates.empty else now.date()
+default_end   = valid_dates.max() if not valid_dates.empty else now.date()
+
 start_date, end_date = st.date_input(
     "Intervallo",
     value=(default_start, default_end),
