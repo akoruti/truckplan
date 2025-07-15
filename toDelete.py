@@ -41,16 +41,5 @@ if "df" not in st.session_state:
 # --- Upload CSV ---
 uploaded_file = st.file_uploader("Carica un file CSV", type="csv")
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    df = df.rename(columns=rename_dict)
-    st.session_state.df = df
-
-# --- Elaborazione dati se presenti ---
-if st.session_state.df is not None:
-    df = st.session_state.df.copy()
-
-    # 1) Riordina colonne
-    other_cols = [c for c in df.columns if c not in desired_order]
-    cols = [
+    df = pd](#)
 
-
