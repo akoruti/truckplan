@@ -16,14 +16,14 @@ desired_order = [
     "ARRIVO",
 ]
 
-# --- Rinomina colonne ---
+# --- Mappatura colonne ---
 rename_dict = {
     "Unnamed: 0": "DATA ORA PARTENZA",
     "ORARIO": "DATA ORA ARRIVO",
 }
 
-# --- Ora corrente con fuso Europa/Roma ---
-now = datetime.datetime.now(ZoneInfo("Europe/Roma"))
+# --- Ora corrente con fuso Europa/Rome ---
+now = datetime.datetime.now(ZoneInfo("Europe/Rome"))
 now_str = now.strftime('%d/%m/%Y %H:%M')
 
 # Mostra orologio live
@@ -56,7 +56,7 @@ if st.session_state.df is not None:
     # Converti DATA ORA PARTENZA in datetime con fuso orario
     df['PARTENZA_DT'] = pd.to_datetime(
         df["DATA ORA PARTENZA"], dayfirst=True, errors='coerce'
-    ).dt.tz_localize(ZoneInfo("Europe/Roma"), nonexistent='NaT', ambiguous='NaT')
+    ).dt.tz_localize(ZoneInfo("Europe/Rome"), nonexistent='NaT', ambiguous='NaT')
 
     # Ordina decrescente per DATA ORA PARTENZA
     df = df.sort_values(by='PARTENZA_DT', ascending=False)
@@ -101,3 +101,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
