@@ -51,16 +51,23 @@ else:
     st.error("La colonna 'DATA ORA PARTENZA' non è stata trovata.")
     st.stop()
 
-# --- Selettore intervallo di date in US MM/DD/YYYY ---
+# --- Selettore separato di start_date e end_date in US MM/DD/YYYY ---
 st.subheader("🔍 Scegli intervallo di date di partenza (MM/DD/YYYY)")
 valid_dates = df["DATA ORA PARTENZA"].dt.date.dropna()
 default_start = valid_dates.min() if not valid_dates.empty else now.date()
 default_end   = valid_dates.max() if not valid_dates.empty else now.date()
 
-start_date, end_date = st.date_input(
-    "Select start and end dates",
-    value=(default_start, default_end),
-    format="MM/DD/YYYY"
+start_date = st.date_input(
+    "Select start date",
+    value=default_start,
+    format="MM/DD/YYYY",
+    key="start_date"
+)
+end_date = st.date_input(
+    "Select end date",
+    value=default_end,
+    format="MM/DD/YYYY",
+    key="end_date"
 )
 
 # Verifica che start_date ≤ end_date
@@ -88,4 +95,6 @@ st.download_button(
     data=buffer.getvalue(),
     file_name=f"dati_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv",
     mime="text/csv",
+)
+
 )
